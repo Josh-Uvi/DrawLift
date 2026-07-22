@@ -459,6 +459,61 @@
 
 All implementation work is tracked as **GitHub Issues** on the project repo. Two equivalent ways to manage them: the **GitHub CLI (`gh`)** from the terminal, or the **GitHub MCP server** from inside an AI agent (e.g. Cline, Claude Desktop, Cursor).
 
+> **Status (this repo):** the project board, 28 user-story issues, 6 milestones, all labels, and the auto-sync workflows are already in place. See the **AI File Converter** project: https://github.com/users/Josh-Uvi/projects/1
+>
+> The exact one-shot scripts used to bootstrap everything from scratch live in `scripts/` (`bootstrap-github.sh`, `create-issues.py` + `stories.json`, `add-to-project.py`).
+
+## A.0 Live state of this repo
+
+| Resource | Where |
+|---|---|
+| Project board | https://github.com/users/Josh-Uvi/projects/1 (Status: `Todo` / `In Progress` / `Done`) |
+| Milestones (one per stage) | `Stage 0: Bootstrap` -> `Stage 5: Polish & DWG` (6 total) |
+| User-story issues | `#1` ... `#28` (one per `US-###` defined below) |
+| Parent tracking issue | `#29` - "AI File Converter - PDF to DWG (project root)" |
+| Auto-sync workflow | `.github/workflows/project-sync.yml` |
+| CI workflow | `.github/workflows/ci.yml` |
+
+## A.6 Automation: workflows on push and PR
+
+Two GitHub Actions workflows drive the board. Both run automatically on every push to `main` and on every pull request.
+
+**`ci.yml`** - Lint + Docker build validation (3 parallel jobs: `backend`, `frontend`, `docker`).
+
+**`project-sync.yml`** - The key board automation. It listens for `issues`, `pull_request`, and `push` events and, via the GraphQL API, moves the linked card to the correct Status column:
+
+| Event | Card moves to |
+|---|---|
+| Issue `opened` / `reopened` | `Todo` |
+| Pull request `opened` / `synchronize` | `In Progress` |
+| Issue `closed` | `Done` |
+| Pull request `closed` (merged or not) | `Done` |
+| Push to `main` whose commit message contains `Closes #N` / `Fixes #N` | `Done` (and the issue is auto-closed) |
+
+The default `GITHUB_TOKEN` is sufficient. If your org requires finer-grained permissions, add a `PROJECT_TOKEN` secret (PAT with `project` scope) and the workflow will prefer it.
+
+## A.10 Daily developer flow (with the automation in place)
+
+```bash
+# 1. Pick an issue and create a feature branch
+gh issue list --label "epic:p1-scaffold" --state open
+git checkout -b feat/9-landing-dropzone      # 9 = US-009 issue number
+
+# 2. Implement, commit with the auto-close keyword
+git commit -m "feat(frontend): landing dropzone
+
+Closes #9"
+
+# 3. Push and open a PR (project-sync.yml moves #9 to In Progress)
+git push origin feat/9-landing-dropzone
+gh pr create --base main --title "[US-009] Landing dropzone" --body "Closes #9"
+
+# 4. Merge the PR (project-sync.yml moves #9 to Done and closes it)
+gh pr merge --squash
+```
+
+No manual card dragging required.
+
 ## A.1 One-Time Setup
 
 ```bash

@@ -1,0 +1,126 @@
+# .github/workflows/ci.yml
+# ----------------------------------------------------------------------------
+# Continuous Integration for the AI File Converter.
+# Runs on every push to main and on every pull request.
+#
+# Pipeline:
+#   1. Lint + type-check the backend (ruff, mypy)
+#   2. Lint the frontend (eslint, prettier)
+#   3. Validate the Dockerfiles by building them (no push)
+#   4. Run unit tests (backend pytest, frontend vitest) when present
+# ----------------------------------------------------------------------------
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend (Python / FastAPI / Celery)
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install ruff mypy pytest pytest-asyncio
+
+      - name: Lint with ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type-check with mypy
+        run: mypy app || true   # soft until first version lands
+
+      - name: Run pytest
+        run: pytest -q || true  # soft until first version lands
+
+  # ---------------------------------------------------------------------------
+  # Frontend (Next.js / TypeScript)
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          fi
+
+      - name: Lint with ESLint
+        run: |
+          if [ -f package.json ]; then
+            npx eslint . --ext .ts,.tsx || true   # soft until first version lands
+            npx prettier --check "**/*.{ts,tsx,js,json,md}" || true
+          fi
+
+      - name: Build (Next.js)
+        run: |
+          if [ -f package.json ] && grep -q '"build"' package.json; then
+            npm run build
+          else
+            echo "No build script yet (scaffold phase) - skipping"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Docker - validate the Dockerfiles by building them
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker (build validation)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        run: |
+          if [ -f backend/Dockerfile ]; then
+            docker build -t aifc-backend:ci backend
+          else
+            echo "backend/Dockerfile not present yet - skipping"
+          fi
+
+      - name: Build frontend image
+        run: |
+          if [ -f frontend/Dockerfile ]; then
+            docker build -t aifc-frontend:ci frontend
+          else
+            echo "frontend/Dockerfile not present yet - skipping"
+          fi
