@@ -1,8 +1,8 @@
 fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
-  checksum: 58c954569cbf657b3c79ce3a7cf4837559b403bc1596c16df444c0800043e8ae
+  checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: TODO.md
-  checksum: 0176a7cb3bfcce826555a64c6470b2f0fefa9df0be37d82f4455d9cfecc9a859
+  checksum: 5eee2a7801ea5074e32e34a25d050e0792297de03974a7a25a887e51c73ee3ee
 - filename: .env.example
   checksum: 300c0cac552c54660180ce29f391bc21617ac74830be6332684f5bef55de301c
 - filename: backend/alembic/env.py

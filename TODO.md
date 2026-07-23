@@ -54,7 +54,7 @@
 | Date | Milestone | PR | Stories completed | Notes |
 |---|---|---|---|---|
 | 2025-07-22 | Stage 0 — US-001 | [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged) | US-001 | Monorepo layout, `.gitignore`, `LICENSE`, `README.md` |
-| 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open) | US-002 → US-011 | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming. US-003 partially complete (pre-commit hook pending). |
+| 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open) | US-002 → US-011 | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming, and pre-commit quality gates. |
 
 ---
 
@@ -98,15 +98,16 @@
 ## Epic 0.3 — Code Quality Tooling
 
 ### US-003 · As a developer, I want linting and formatting pre-configured
-- **Priority:** P1 · **Effort:** S · **Status:** 🚧 In Progress · **Labels:** `area:devops`, `type:chore`
-- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (linting configured; pre-commit hook pending)
+- **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:chore`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
   - [x] Backend: `ruff` (lint + format) and `mypy` configured
   - [x] Frontend: `eslint` + `prettier` configured
-  - [ ] `pre-commit` hook runs both linters
+  - [x] `pre-commit` hook runs both linters
 - **Tasks:**
   - [x] T-010 — Configure `ruff.toml` and `pyproject.toml` for backend
   - [x] T-011 — Configure `eslint.config.js` and `.prettierrc` for frontend
+  - [x] T-011a — Configure root `.pre-commit-config.yaml` to run backend and frontend checks
 
 ### US-004 · As a developer, I want a basic CI pipeline on GitHub Actions
 - **Priority:** P2 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:feature`
@@ -736,4 +737,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.2 — updated 2025-07-23 to reflect Phase 1 implementation (PR [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) + [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)). US-001 ✅ Done; US-002 → US-011 👀 In Review (US-003 🚧 In Progress — pre-commit hook pending).*
+*Document version 0.2 — updated 2025-07-23 to reflect Phase 1 implementation (PR [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) + [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)). US-001 ✅ Done; US-002 → US-011 👀 In Review.*

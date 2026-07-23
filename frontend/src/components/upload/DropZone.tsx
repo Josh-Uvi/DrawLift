@@ -36,9 +36,7 @@ export default function DropZone({ onFileSelect, disabled = false }: DropZonePro
     <div
       {...getRootProps()}
       className={`flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors ${
-        isDragActive
-          ? "border-primary bg-blue-50"
-          : "border-gray-300 hover:border-gray-400"
+        isDragActive ? "border-primary bg-blue-50" : "border-gray-300 hover:border-gray-400"
       } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
     >
       <input {...getInputProps()} />

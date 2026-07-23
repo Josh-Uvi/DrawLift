@@ -6,11 +6,7 @@ import Card from "@/components/shared/Card";
 import Button from "@/components/shared/Button";
 import ProgressTracker from "@/components/job/ProgressTracker";
 
-export default function JobDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
   return (
