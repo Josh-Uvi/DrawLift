@@ -37,7 +37,7 @@ jobs:
   sync-project:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.PROJECT_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
       - name: Sync issue/PR to project board
         env:
