@@ -1,27 +1,28 @@
 name: PR Agent
+
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize, review_requested, edited]
   issue_comment:
+    types: [created]
+
 jobs:
-  pr_agent_job:
-    if: ${{ github.event.sender.type != 'Bot' }}
+  pr-agent:
+    name: Review, describe, and improve pull requests
+    if: ${{ github.event.sender.type != 'Bot' && (github.event_name == 'pull_request' || github.event.issue.pull_request != null) }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
-      contents: write
-    name: Run pr agent on every pull request, respond to user comments
+      contents: read
     steps:
-      - name: PR Agent action step
+      - name: Run PR Agent
         id: pr-agent
         uses: the-pr-agent/pr-agent@main
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-          GITHUB_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # Enable/disable automatic tools
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Automatically comment on every PR with review, description, and improvement feedback.
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
-          # Configure which PR events trigger the action
-          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested"]'
