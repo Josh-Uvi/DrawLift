@@ -278,6 +278,12 @@ Implemented foundation:
 - `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
 - `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
+Implemented foundation:
+- `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
+- `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
+- `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
+- `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
+
 ### 8.2 Observer / Pub-Sub — Progress Reporting
 Workers publish progress events to **Redis Pub/Sub**. The FastAPI SSE endpoint subscribes and forwards events to the browser. This decouples the worker from the web layer and lets multiple workers report independently.
 
