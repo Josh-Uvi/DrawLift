@@ -41,9 +41,7 @@ export default function ProgressTracker({ jobId }: ProgressTrackerProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span
-          className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_COLORS[status]}`}
-        >
+        <span className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_COLORS[status]}`}>
           {status}
         </span>
         <span className="text-sm text-gray-500">{progress}%</span>

@@ -36,11 +36,7 @@ export async function getJob(jobId: string): Promise<Job> {
   return response.json();
 }
 
-export async function listJobs(
-  status?: string,
-  limit = 50,
-  offset = 0
-): Promise<JobListResponse> {
+export async function listJobs(status?: string, limit = 50, offset = 0): Promise<JobListResponse> {
   const params = new URLSearchParams();
   if (status) params.set("status_filter", status);
   params.set("limit", String(limit));

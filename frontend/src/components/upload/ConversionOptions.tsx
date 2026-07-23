@@ -46,9 +46,7 @@ export default function ConversionOptions({
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">
-          DPI: {config.dpi}
-        </label>
+        <label className="mb-2 block text-sm font-medium text-gray-700">DPI: {config.dpi}</label>
         <input
           type="range"
           min={150}
@@ -68,18 +66,14 @@ export default function ConversionOptions({
 
       {config.mode === "3d" && (
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Floor Height (m)
-          </label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Floor Height (m)</label>
           <input
             type="number"
             min={0.5}
             max={10}
             step={0.1}
             value={config.floor_height_m}
-            onChange={(e) =>
-              onChange({ ...config, floor_height_m: Number(e.target.value) })
-            }
+            onChange={(e) => onChange({ ...config, floor_height_m: Number(e.target.value) })}
             disabled={disabled}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           />
@@ -87,14 +81,10 @@ export default function ConversionOptions({
       )}
 
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">
-          Output Format
-        </label>
+        <label className="mb-2 block text-sm font-medium text-gray-700">Output Format</label>
         <select
           value={config.output_format}
-          onChange={(e) =>
-            onChange({ ...config, output_format: e.target.value as "dxf" | "dwg" })
-          }
+          onChange={(e) => onChange({ ...config, output_format: e.target.value as "dxf" | "dwg" })}
           disabled={disabled}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >

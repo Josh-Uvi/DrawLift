@@ -247,6 +247,7 @@ ai-file-converter/
 ├── scripts/                        # GitHub bootstrap & issue creation
 ├── docker-compose.yml              # Orchestrates all 5 services
 ├── .env.example                    # Environment variables template
+├── .pre-commit-config.yaml         # Local lint/format/type-check hooks
 ├── .talismanrc                     # Pre-push hook config
 ├── README.md                       # ← you are here (architecture)
 └── TODO.md                         # Execution tracker (GitHub Issues)
@@ -377,6 +378,7 @@ redis==5.*               # Celery broker + Pub/Sub
 sse-starlette==2.*       # SSE streaming
 ruff==0.8.*              # linting
 mypy==1.*                # type checking
+pre-commit==4.*          # local Git quality gates
 pytest==8.*              # testing
 pytest-asyncio==0.24.*
 httpx==0.28.*            # test client
@@ -459,14 +461,34 @@ npm run dev
 # Backend
 cd backend
 ruff check .          # linting
+ruff format --check . # formatting check
 mypy app/             # type checking
 pytest                # tests
 
 # Frontend
 cd frontend
 npm run lint          # ESLint
+npm run format:check  # Prettier formatting check
 npm run build         # production build
 ```
+
+### Pre-commit hooks
+
+Install the Git pre-commit hook after setting up the backend and frontend dependencies:
+
+```bash
+pip install -r backend/requirements.txt
+cd frontend && npm install && cd ..
+pre-commit install
+```
+
+Run the full hook suite manually with:
+
+```bash
+pre-commit run --all-files
+```
+
+The hook runs backend Ruff lint/format checks, backend mypy, frontend ESLint, and frontend Prettier checks before each commit.
 
 ---
 

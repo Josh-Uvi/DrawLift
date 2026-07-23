@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff
+        name: Backend lint and format check (ruff)
+        entry: bash -c 'cd backend && ruff check . && ruff format --check .'
+        language: system
+        pass_filenames: false
+
+      - id: backend-mypy
+        name: Backend type check (mypy)
+        entry: bash -c 'cd backend && mypy app'
+        language: system
+        pass_filenames: false
+
+      - id: frontend-eslint
+        name: Frontend lint (ESLint)
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        pass_filenames: false
+
+      - id: frontend-prettier
+        name: Frontend format check (Prettier)
+        entry: bash -c 'cd frontend && npm run format:check'
+        language: system
+        pass_filenames: false

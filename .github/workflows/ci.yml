@@ -84,8 +84,8 @@ jobs:
       - name: Lint with ESLint
         run: |
           if [ -f package.json ]; then
-            npx eslint . --ext .ts,.tsx || true   # soft until first version lands
-            npx prettier --check "**/*.{ts,tsx,js,json,md}" || true
+            npm run lint || true          # soft until first version lands
+            npm run format:check || true
           fi
 
       - name: Build (Next.js)
