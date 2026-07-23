@@ -2,5 +2,6 @@
 
 from app.pipeline.steps.base import PipelineStep
 from app.pipeline.steps.pdf_parser import PdfParserStep
+from app.pipeline.steps.preprocessor import OpenCVPreprocessor
 
-__all__ = ["PdfParserStep", "PipelineStep"]
+__all__ = ["OpenCVPreprocessor", "PdfParserStep", "PipelineStep"]

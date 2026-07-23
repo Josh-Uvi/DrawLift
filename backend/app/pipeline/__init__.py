@@ -5,8 +5,10 @@ from app.pipeline.orchestrator import Pipeline, create_pipeline
 from app.pipeline.progress import ProgressEvent, RedisProgressPublisher, get_progress_publisher
 from app.pipeline.steps.base import PipelineStep
 from app.pipeline.steps.pdf_parser import PdfParserStep
+from app.pipeline.steps.preprocessor import OpenCVPreprocessor
 
 __all__ = [
+    "OpenCVPreprocessor",
     "Pipeline",
     "PipelineContext",
     "PipelineStep",
