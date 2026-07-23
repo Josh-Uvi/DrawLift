@@ -22,11 +22,7 @@ jobs:
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-<<<<<<< Updated upstream
           # Enable/disable automatic tools
-=======
-          # Automatically comment on every PR with review, description, and improvement feedback.
->>>>>>> Stashed changes
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
