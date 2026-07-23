@@ -147,6 +147,16 @@ uploads/
 output/
 models/
 
+# Negate for backend source code directories that match the above patterns
+!backend/app/storage/
+!backend/app/storage/**
+!backend/app/models/
+!backend/app/models/**
+
+# Re-exclude __pycache__ within negated directories
+backend/app/**/__pycache__/
+backend/app/**/*.pyc
+
 # Logs
 logs/
 *.log
