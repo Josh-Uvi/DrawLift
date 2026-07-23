@@ -2,6 +2,7 @@
 # ----------------------------------------------------------------------------
 # Continuous Integration for the AI File Converter.
 # Runs on every push to main and on every pull request.
+# Push commits whose message starts with "chore:" intentionally skip CI jobs.
 #
 # Pipeline:
 #   1. Lint + type-check the backend (ruff, mypy)
@@ -23,6 +24,7 @@ jobs:
   # ---------------------------------------------------------------------------
   backend:
     name: Backend (lint + test)
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore:') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,6 +63,7 @@ jobs:
   # ---------------------------------------------------------------------------
   frontend:
     name: Frontend (lint + build)
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore:') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -101,6 +104,7 @@ jobs:
   # ---------------------------------------------------------------------------
   docker:
     name: Docker (build validation)
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore:') }}
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     steps:
