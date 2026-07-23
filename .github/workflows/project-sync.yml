@@ -5,10 +5,13 @@
 # move its card to the correct column on the board without human intervention.
 #
 #   - Issue opened / reopened   -> Todo
-#   - PR opened (closes #N)     -> In Progress
-#   - PR merged / closed        -> Done (auto-closes linked issues)
-#   - Commit pushed to main that contains "Closes #N" / "Fixes #N" -> Done
-#   - Issue closed              -> Done
+#   - PR opened / synchronized   -> In Review
+#   - PR merged / closed         -> Done (if all acceptance criteria checked)
+#                                 -> In Review (if criteria partially complete)
+#   - Commit pushed to main with "Closes #N" -> Done (if all criteria checked)
+#                                              -> In Review (if partial)
+#   - Issue closed               -> Done (if all criteria checked)
+#                                 -> In Review (if criteria partially complete)
 #
 # Uses curl + jq directly (no actions/github-script) to avoid Node 20
 # deprecation warnings and give full control over error handling.
@@ -48,6 +51,7 @@ jobs:
           STATUS_FIELD_NAME="Status"
           COL_TODO="Todo"
           COL_PROGRESS="In Progress"
+          COL_REVIEW="In Review"
           COL_DONE="Done"
           API_URL="https://api.github.com/graphql"
 
@@ -122,6 +126,7 @@ jobs:
 
           OPT_TODO=$(get_opt "$COL_TODO")
           OPT_PROGRESS=$(get_opt "$COL_PROGRESS")
+          OPT_REVIEW=$(get_opt "$COL_REVIEW")
           OPT_DONE=$(get_opt "$COL_DONE")
 
           # ----------------------------------------------------------------
@@ -182,6 +187,44 @@ jobs:
           }
 
           # ----------------------------------------------------------------
+          # 2b) Acceptance criteria checker
+          # ----------------------------------------------------------------
+          # Fetches the issue body and counts checked vs unchecked checkboxes.
+          # Returns "done" if all checkboxes are checked, "review" if partial,
+          # "done" if there are no checkboxes at all.
+          check_acceptance_criteria() {
+            local issue_number="$1"
+            local issue_body
+            issue_body=$(curl -s --retry 3 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$issue_number" \
+              | jq -r '.body // empty')
+
+            if [ -z "$issue_body" ]; then
+              echo "done"
+              return
+            fi
+
+            local total checked unchecked
+            total=$(echo "$issue_body" | grep -cE '^\s*- \[[ xX]\]' || echo 0)
+            checked=$(echo "$issue_body" | grep -cE '^\s*- \[[xX]\]' || echo 0)
+            unchecked=$(echo "$issue_body" | grep -cE '^\s*- \[ \]' || echo 0)
+
+            echo "Issue #$issue_number: $checked checked, $unchecked unchecked, $total total checkboxes"
+
+            if [ "$total" -eq 0 ]; then
+              echo "done"
+              return
+            fi
+
+            if [ "$unchecked" -eq 0 ]; then
+              echo "done"
+            else
+              echo "review"
+            fi
+          }
+
+          # ----------------------------------------------------------------
           # 3) Determine target column from event
           # ----------------------------------------------------------------
           EVENT_NAME="$GITHUB_EVENT_NAME"
@@ -211,9 +254,17 @@ jobs:
                   "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num" >/dev/null
               fi
 
+              # Check acceptance criteria before moving to Done
+              CRITERIA_RESULT=$(check_acceptance_criteria "$num")
+              if [ "$CRITERIA_RESULT" = "done" ]; then
+                TARGET="$OPT_DONE"
+              else
+                TARGET="$OPT_REVIEW"
+              fi
+
               ITEM_ID=$(find_existing_item "$ISSUE_NODE_ID")
               [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$ISSUE_NODE_ID")
-              set_status "$ITEM_ID" "$OPT_DONE"
+              set_status "$ITEM_ID" "$TARGET"
             done
             exit 0
           fi
@@ -225,8 +276,15 @@ jobs:
           if [ "$EVENT_NAME" = "issues" ]; then
             CONTENT_ID=$(jq -r '.issue.node_id // empty' "$EVENT_PATH")
             ACTION=$(jq -r '.action // empty' "$EVENT_PATH")
+            ISSUE_NUMBER=$(jq -r '.issue.number // empty' "$EVENT_PATH")
             if [ "$ACTION" = "closed" ]; then
-              TARGET="$OPT_DONE"
+              # Check acceptance criteria before moving to Done
+              CRITERIA_RESULT=$(check_acceptance_criteria "$ISSUE_NUMBER")
+              if [ "$CRITERIA_RESULT" = "done" ]; then
+                TARGET="$OPT_DONE"
+              else
+                TARGET="$OPT_REVIEW"
+              fi
             else
               TARGET="$OPT_TODO"
             fi
@@ -235,9 +293,38 @@ jobs:
             ACTION=$(jq -r '.action // empty' "$EVENT_PATH")
             MERGED=$(jq -r '.pull_request.merged // false' "$EVENT_PATH")
             if [ "$MERGED" = "true" ] || [ "$ACTION" = "closed" ]; then
+              # PR merged/closed — check linked issues for acceptance criteria
+              # Extract issue numbers from PR body (Closes #N, Fixes #N, etc.)
+              PR_BODY=$(jq -r '.pull_request.body // empty' "$EVENT_PATH")
+              ISSUE_NUMS=$(echo "$PR_BODY" | grep -oiE '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#[0-9]+' | grep -oE '[0-9]+' | sort -u)
+
+              if [ -n "$ISSUE_NUMS" ]; then
+                for num in $ISSUE_NUMS; do
+                  echo "Checking acceptance criteria for linked issue #$num"
+                  CRITERIA_RESULT=$(check_acceptance_criteria "$num")
+                  if [ "$CRITERIA_RESULT" = "done" ]; then
+                    TARGET="$OPT_DONE"
+                  else
+                    TARGET="$OPT_REVIEW"
+                  fi
+
+                  # Move the linked issue
+                  ISSUE_JSON=$(curl -s --retry 3 \
+                    -H "Authorization: Bearer $GH_TOKEN" \
+                    "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num")
+                  ISSUE_NODE_ID=$(echo "$ISSUE_JSON" | jq -r '.node_id // empty')
+                  if [ -n "$ISSUE_NODE_ID" ]; then
+                    ITEM_ID=$(find_existing_item "$ISSUE_NODE_ID")
+                    [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$ISSUE_NODE_ID")
+                    set_status "$ITEM_ID" "$TARGET"
+                  fi
+                done
+              fi
+              # Also move the PR itself to Done or In Review
               TARGET="$OPT_DONE"
             else
-              TARGET="$OPT_PROGRESS"
+              # PR opened/synchronized/reopened -> In Review
+              TARGET="$OPT_REVIEW"
             fi
           fi
 
