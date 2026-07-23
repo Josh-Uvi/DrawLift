@@ -38,14 +38,23 @@
 
 | # | Stage | Goal | Status | Stories | Tasks |
 |---|---|---|---|---|---|
-| 0 | **Bootstrap** | Repo, tooling, CI scaffold | ⬜ Backlog | 4 | 12 |
-| 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | ⬜ Backlog | 5 | 18 |
+| 0 | **Bootstrap** | Repo, tooling, CI scaffold | 🚧 In Progress | 4 | 12 |
+| 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | 👀 In Review | 5 | 18 |
 | 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | ⬜ Backlog | 4 | 14 |
 | 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | ⬜ Backlog | 5 | 16 |
 | 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | ⬜ Backlog | 4 | 12 |
 | 5 | **Phase 5 — Polish & DWG** | Production-ready with DWG export | ⬜ Backlog | 6 | 20 |
 
 **Total: 28 user stories · 92 actionable tasks**
+
+---
+
+## Progress Log
+
+| Date | Milestone | PR | Stories completed | Notes |
+|---|---|---|---|---|
+| 2025-07-22 | Stage 0 — US-001 | [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged) | US-001 | Monorepo layout, `.gitignore`, `LICENSE`, `README.md` |
+| 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open) | US-002 → US-011 | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming. US-003 partially complete (pre-commit hook pending). |
 
 ---
 
@@ -56,54 +65,58 @@
 ## Epic 0.1 — Repository Structure
 
 ### US-001 · As a developer, I want a monorepo layout with `frontend/` and `backend/` folders
-- **Priority:** P0 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:devops`, `type:chore`
+- **Priority:** P0 · **Effort:** S · **Status:** ✅ Done · **Labels:** `area:devops`, `type:chore`
+- **PR:** [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged to `main` at `5ae452a`)
 - **Acceptance Criteria:**
-  - [ ] `frontend/` and `backend/` directories created
-  - [ ] Root `.gitignore` covers Node, Python, IDE, OS files
-  - [ ] Root `README.md` links to `TODO.md` and architecture doc
-  - [ ] `LICENSE` file present
+  - [x] `frontend/` and `backend/` directories created
+  - [x] Root `.gitignore` covers Node, Python, IDE, OS files
+  - [x] Root `README.md` links to `TODO.md` and architecture doc
+  - [x] `LICENSE` file present
 - **Tasks:**
-  - [ ] T-001 — Create `frontend/` and `backend/` directories
-  - [ ] T-002 — Write root `.gitignore`
-  - [ ] T-003 — Add `LICENSE` (MIT recommended for POC)
-  - [ ] T-004 — Update README to reference TODO.md
+  - [x] T-001 — Create `frontend/` and `backend/` directories
+  - [x] T-002 — Write root `.gitignore`
+  - [x] T-003 — Add `LICENSE` (MIT recommended for POC)
+  - [x] T-004 — Update README to reference TODO.md
 
 ## Epic 0.2 — Docker Compose Foundations
 
 ### US-002 · As a developer, I want `docker compose up` to start all services
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:devops`, `type:feature`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:feature`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] `docker-compose.yml` defines: `frontend`, `backend`, `worker`, `postgres`, `redis`
-  - [ ] All services start without errors
-  - [ ] Health check endpoint on backend responds 200
-  - [ ] Frontend reachable at `http://localhost:3000`
+  - [x] `docker-compose.yml` defines: `frontend`, `backend`, `worker`, `postgres`, `redis`
+  - [x] All services start without errors
+  - [x] Health check endpoint on backend responds 200
+  - [x] Frontend reachable at `http://localhost:3000`
 - **Tasks:**
-  - [ ] T-005 — Write `docker-compose.yml` with 5 services
-  - [ ] T-006 — Write `.env.example` with all required variables
-  - [ ] T-007 — Write `backend/Dockerfile` (Python 3.11-slim)
-  - [ ] T-008 — Write `frontend/Dockerfile` (Node 20-alpine, multi-stage)
-  - [ ] T-009 — Wire service dependencies (backend → postgres, redis; worker → backend image)
+  - [x] T-005 — Write `docker-compose.yml` with 5 services
+  - [x] T-006 — Write `.env.example` with all required variables
+  - [x] T-007 — Write `backend/Dockerfile` (Python 3.11-slim)
+  - [x] T-008 — Write `frontend/Dockerfile` (Node 20-alpine, multi-stage)
+  - [x] T-009 — Wire service dependencies (backend → postgres, redis; worker → backend image)
 
 ## Epic 0.3 — Code Quality Tooling
 
 ### US-003 · As a developer, I want linting and formatting pre-configured
-- **Priority:** P1 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:devops`, `type:chore`
+- **Priority:** P1 · **Effort:** S · **Status:** 🚧 In Progress · **Labels:** `area:devops`, `type:chore`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (linting configured; pre-commit hook pending)
 - **Acceptance Criteria:**
-  - [ ] Backend: `ruff` (lint + format) and `mypy` configured
-  - [ ] Frontend: `eslint` + `prettier` configured
+  - [x] Backend: `ruff` (lint + format) and `mypy` configured
+  - [x] Frontend: `eslint` + `prettier` configured
   - [ ] `pre-commit` hook runs both linters
 - **Tasks:**
-  - [ ] T-010 — Configure `ruff.toml` and `pyproject.toml` for backend
-  - [ ] T-011 — Configure `eslint.config.js` and `.prettierrc` for frontend
+  - [x] T-010 — Configure `ruff.toml` and `pyproject.toml` for backend
+  - [x] T-011 — Configure `eslint.config.js` and `.prettierrc` for frontend
 
 ### US-004 · As a developer, I want a basic CI pipeline on GitHub Actions
-- **Priority:** P2 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:devops`, `type:feature`
+- **Priority:** P2 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:feature`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] CI runs on PR + push to `main`
-  - [ ] Lints backend and frontend
-  - [ ] Builds Docker images to validate Dockerfile syntax
+  - [x] CI runs on PR + push to `main`
+  - [x] Lints backend and frontend
+  - [x] Builds Docker images to validate Dockerfile syntax
 - **Tasks:**
-  - [ ] T-012 — Write `.github/workflows/ci.yml`
+  - [x] T-012 — Write `.github/workflows/ci.yml`
 
 ---
 
@@ -114,97 +127,104 @@
 ## Epic 1.1 — Backend Foundation
 
 ### US-005 · As a backend dev, I want a FastAPI skeleton with health checks and config
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] `GET /api/v1/health` returns `{"status": "ok"}`
-  - [ ] Pydantic settings load from `.env`
-  - [ ] CORS configured to allow frontend origin
-  - [ ] OpenAPI docs at `/docs`
+  - [x] `GET /api/v1/health` returns `{"status": "ok"}`
+  - [x] Pydantic settings load from `.env`
+  - [x] CORS configured to allow frontend origin
+  - [x] OpenAPI docs at `/docs`
 - **Tasks:**
-  - [ ] T-013 — Create `backend/app/main.py` with FastAPI app
-  - [ ] T-014 — Create `backend/app/core/config.py` with pydantic-settings
-  - [ ] T-015 — Add CORS middleware
-  - [ ] T-016 — Create `backend/app/api/v1/health.py`
+  - [x] T-013 — Create `backend/app/main.py` with FastAPI app
+  - [x] T-014 — Create `backend/app/core/config.py` with pydantic-settings
+  - [x] T-015 — Add CORS middleware
+  - [x] T-016 — Create `backend/app/api/v1/health.py`
 
 ### US-006 · As a backend dev, I want PostgreSQL connected via SQLAlchemy (async)
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] `Job` model matches the schema in README §6
-  - [ ] `alembic upgrade head` creates `jobs` table
-  - [ ] Async session dependency in FastAPI
+  - [x] `Job` model matches the schema in README §6
+  - [x] `alembic upgrade head` creates `jobs` table
+  - [x] Async session dependency in FastAPI
 - **Tasks:**
-  - [ ] T-017 — Create `backend/app/models/job.py` SQLAlchemy model
-  - [ ] T-018 — Create `backend/app/core/database.py` async engine + session
-  - [ ] T-019 — Initialise Alembic, write first migration for `jobs` table
-  - [ ] T-020 — Create `JobRepository` with CRUD methods
+  - [x] T-017 — Create `backend/app/models/job.py` SQLAlchemy model
+  - [x] T-018 — Create `backend/app/core/database.py` async engine + session
+  - [x] T-019 — Initialise Alembic, write first migration for `jobs` table
+  - [x] T-020 — Create `JobRepository` with CRUD methods
 
 ### US-007 · As a backend dev, I want Celery wired to Redis
-- **Priority:** P0 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **Priority:** P0 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] `celery -A app.tasks.celery_app worker` starts without errors
-  - [ ] A dummy task can be enqueued and executed
-  - [ ] Result backend persists in Redis
+  - [x] `celery -A app.tasks.celery_app worker` starts without errors
+  - [x] A dummy task can be enqueued and executed
+  - [x] Result backend persists in Redis
 - **Tasks:**
-  - [ ] T-021 — Create `backend/app/tasks/celery_app.py` with Celery config
-  - [ ] T-022 — Create `backend/app/tasks/placeholder.py` dummy task
+  - [x] T-021 — Create `backend/app/tasks/celery_app.py` with Celery config
+  - [x] T-022 — Create `backend/app/tasks/placeholder.py` dummy task
 
 ## Epic 1.2 — File Upload API
 
 ### US-008 · As a user, I want to upload a PDF and receive a `job_id`
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] `POST /api/v1/jobs` accepts `multipart/form-data` with `file` + `config`
-  - [ ] Only `.pdf` files accepted (validated by MIME + extension)
-  - [ ] File saved to local `storage/` directory (or S3 in prod)
-  - [ ] Job row created in DB with `status=pending`
-  - [ ] Celery task enqueued
-  - [ ] Response: `201 { "job_id": "uuid" }`
+  - [x] `POST /api/v1/jobs` accepts `multipart/form-data` with `file` + `config`
+  - [x] Only `.pdf` files accepted (validated by MIME + extension)
+  - [x] File saved to local `storage/` directory (or S3 in prod)
+  - [x] Job row created in DB with `status=pending`
+  - [x] Celery task enqueued
+  - [x] Response: `201 { "job_id": "uuid" }`
 - **Tasks:**
-  - [ ] T-023 — Create `backend/app/schemas/job.py` Pydantic models
-  - [ ] T-024 — Create `backend/app/storage/local.py` (with `StorageBackend` interface)
-  - [ ] T-025 — Create `backend/app/api/v1/jobs.py` with `POST /jobs` handler
-  - [ ] T-026 — Add `GET /jobs/{id}` and `GET /jobs` endpoints
-  - [ ] T-027 — Wire placeholder Celery task to update job status
+  - [x] T-023 — Create `backend/app/schemas/job.py` Pydantic models
+  - [x] T-024 — Create `backend/app/storage/local.py` (with `StorageBackend` interface)
+  - [x] T-025 — Create `backend/app/api/v1/jobs.py` with `POST /jobs` handler
+  - [x] T-026 — Add `GET /jobs/{id}` and `GET /jobs` endpoints
+  - [x] T-027 — Wire placeholder Celery task to update job status
 
 ## Epic 1.3 — Frontend Foundation
 
 ### US-009 · As a user, I want a clean landing page with a file drop zone
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p1-scaffold`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] Next.js 14 App Router project initialised in `frontend/`
-  - [ ] Tailwind configured
-  - [ ] Landing page renders `<DropZone />` component
-  - [ ] Drag-and-drop and click-to-browse both work
-  - [ ] Only `.pdf` accepted with friendly error message
+  - [x] Next.js 14 App Router project initialised in `frontend/`
+  - [x] Tailwind configured
+  - [x] Landing page renders `<DropZone />` component
+  - [x] Drag-and-drop and click-to-browse both work
+  - [x] Only `.pdf` accepted with friendly error message
 - **Tasks:**
-  - [ ] T-028 — Initialise Next.js 14 with TypeScript + Tailwind
-  - [ ] T-029 — Install `react-dropzone` and `sonner`
-  - [ ] T-030 — Create `components/upload/DropZone.tsx`
-  - [ ] T-031 — Create `components/shared/Button.tsx` and `Card.tsx`
-  - [ ] T-032 — Create `app/page.tsx` landing page
+  - [x] T-028 — Initialise Next.js 14 with TypeScript + Tailwind
+  - [x] T-029 — Install `react-dropzone` and `sonner`
+  - [x] T-030 — Create `components/upload/DropZone.tsx`
+  - [x] T-031 — Create `components/shared/Button.tsx` and `Card.tsx`
+  - [x] T-032 — Create `app/page.tsx` landing page
 
 ### US-010 · As a user, I want to see conversion options before submitting
-- **Priority:** P1 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p1-scaffold`
+- **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] 2D/3D mode toggle
-  - [ ] DPI slider (150/300/600)
-  - [ ] Floor height input (only when 3D)
-  - [ ] Submit button disabled until file chosen
+  - [x] 2D/3D mode toggle
+  - [x] DPI slider (150/300/600)
+  - [x] Floor height input (only when 3D)
+  - [x] Submit button disabled until file chosen
 - **Tasks:**
-  - [ ] T-033 — Create `components/upload/ConversionOptions.tsx`
-  - [ ] T-034 — Wire options to dropzone state via React Hook Form or local state
+  - [x] T-033 — Create `components/upload/ConversionOptions.tsx`
+  - [x] T-034 — Wire options to dropzone state via React Hook Form or local state
 
 ### US-011 · As a user, I want to see live progress after submitting
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p1-scaffold`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p1-scaffold`
+- **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
-  - [ ] On submit, redirected to `/jobs/{id}`
-  - [ ] Progress bar updates from SSE stream
-  - [ ] Status badges for `pending` / `processing` / `completed` / `failed`
+  - [x] On submit, redirected to `/jobs/{id}`
+  - [x] Progress bar updates from SSE stream
+  - [x] Status badges for `pending` / `processing` / `completed` / `failed`
 - **Tasks:**
-  - [ ] T-035 — Create `app/jobs/[id]/page.tsx`
-  - [ ] T-036 — Create `lib/sse.ts` EventSource wrapper
-  - [ ] T-037 — Create `components/job/ProgressTracker.tsx`
-  - [ ] T-038 — Implement `GET /api/v1/jobs/{id}/stream` SSE endpoint on backend
+  - [x] T-035 — Create `app/jobs/[id]/page.tsx`
+  - [x] T-036 — Create `lib/sse.ts` EventSource wrapper
+  - [x] T-037 — Create `components/job/ProgressTracker.tsx`
+  - [x] T-038 — Implement `GET /api/v1/jobs/{id}/stream` SSE endpoint on backend
 
 ---
 
@@ -706,14 +726,14 @@ Stage 2 (PDF)                                              ▼
                     │
 Stage 3 (Vectorize)  ▼
   └── US-016 ── US-017 ── US-018 ── US-019 ── US-020
-                                              │
+                                               │
 Stage 4 (3D)                                    ▼
   └── US-021 ── US-022 ── US-023 ── US-024
-                                      │
+                                       │
 Stage 5 (Polish)                      ▼
   └── US-025 ── US-026 ── US-027 ── US-028
 ```
 
 ---
 
-*Document version 0.1 — initial decomposition. Update as work progresses.*
+*Document version 0.2 — updated 2025-07-23 to reflect Phase 1 implementation (PR [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) + [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)). US-001 ✅ Done; US-002 → US-011 👀 In Review (US-003 🚧 In Progress — pre-commit hook pending).*
