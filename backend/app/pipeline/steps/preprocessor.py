@@ -15,14 +15,16 @@ DEFAULT_GAUSSIAN_KERNEL: tuple[int, int] = (5, 5)
 DEFAULT_ADAPTIVE_BLOCK_SIZE = 15
 DEFAULT_ADAPTIVE_C = 5
 DEFAULT_MAX_ANGLE_DEVIATION = 0.1
+MIN_DESKEW_COMPONENT_AREA = 20
 
 
 class OpenCVPreprocessor(PipelineStep):
     """Preprocess page images with grayscale, threshold, and deskew correction.
 
     This step consumes the ``page_images`` produced by :class:`PdfParserStep`
-    and writes cleaned binary images to ``context.preprocessed`` as a list of
-    filesystem paths.
+    and stores cleaned binary NumPy arrays in ``context.preprocessed`` for the
+    downstream segmentation steps. PNG copies are also written to disk for
+    diagnostics and previews.
     """
 
     name = "OpenCV Preprocessing"
@@ -62,7 +64,8 @@ class OpenCVPreprocessor(PipelineStep):
         output_dir = self._resolve_output_dir(context)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        preprocessed_images: list[Path] = []
+        preprocessed_images: list[np.ndarray] = []
+        preprocessed_paths: list[Path] = []
         for page_index, image_path in enumerate(context.page_images, start=1):
             image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
             if image is None:
@@ -72,12 +75,15 @@ class OpenCVPreprocessor(PipelineStep):
 
             processed = self._process_image(image)
             output_path = output_dir / f"preprocessed_{page_index:04d}.png"
-            cv2.imwrite(str(output_path), processed)
-            preprocessed_images.append(output_path)
+            if not cv2.imwrite(str(output_path), processed):
+                raise OSError(f"Unable to write preprocessed image: {output_path}")
+            preprocessed_images.append(processed)
+            preprocessed_paths.append(output_path)
 
         context.preprocessed = preprocessed_images
         context.metadata["preprocessed_image_dir"] = output_dir
         context.metadata["preprocessed_count"] = len(preprocessed_images)
+        context.metadata["preprocessed_image_paths"] = preprocessed_paths
 
         self.publish_progress(
             context,
@@ -96,16 +102,22 @@ class OpenCVPreprocessor(PipelineStep):
 
     @staticmethod
     def _to_grayscale(image: np.ndarray) -> np.ndarray:
-        """Convert a BGR image to grayscale."""
-        if len(image.shape) == 2:
+        """Convert supported input images to grayscale."""
+        if image.ndim == 2:
             return image
-        return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if image.ndim != 3:
+            raise ValueError("OpenCV preprocessor expects a 2D or 3D image array")
+        if image.shape[2] == 3:
+            return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if image.shape[2] == 4:
+            return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+        raise ValueError("OpenCV preprocessor expects 1, 3, or 4 image channels")
 
     def _apply_gaussian_blur(self, image: np.ndarray) -> np.ndarray:
         """Apply Gaussian blur to reduce noise before thresholding."""
         kernel = self.gaussian_kernel
         if kernel[0] <= 0 or kernel[1] <= 0:
-            return image
+            raise ValueError("Gaussian kernel dimensions must be greater than zero")
         # OpenCV requires odd kernel dimensions for Gaussian blur.
         ksize = (
             kernel[0] if kernel[0] % 2 == 1 else kernel[0] + 1,
@@ -131,36 +143,25 @@ class OpenCVPreprocessor(PipelineStep):
 
     @staticmethod
     def _deskew(image: np.ndarray) -> np.ndarray:
-        """Correct skew by detecting the dominant text/line angle and rotating."""
-        contours, _ = cv2.findContours(
-            image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
-        )
-        if not contours:
+        """Correct skew using the minimum-area rectangle of foreground pixels."""
+        foreground_points = cv2.findNonZero(image)
+        if foreground_points is None:
             return image
 
-        angles: list[float] = []
-        for contour in contours:
-            if cv2.contourArea(contour) < 20:
-                continue
-            rect = cv2.minAreaRect(contour)
-            angle = rect[-1]
-            # minAreaRect returns angles in [-90, 0). Normalize to [-45, 45).
-            if angle < -45:
-                angle = 90 + angle
-            angles.append(angle)
-
-        if not angles:
+        hull = cv2.convexHull(foreground_points)
+        if cv2.contourArea(hull) < MIN_DESKEW_COMPONENT_AREA:
             return image
 
-        median_angle = float(np.median(angles))
-        if abs(median_angle) < DEFAULT_MAX_ANGLE_DEVIATION:
+        raw_angle = float(cv2.minAreaRect(foreground_points)[-1])
+        correction_angle = OpenCVPreprocessor._normalise_deskew_angle(raw_angle)
+        if abs(correction_angle) < DEFAULT_MAX_ANGLE_DEVIATION:
             return image
 
         center = (
             image.shape[1] // 2,
             image.shape[0] // 2,
         )
-        rotation_matrix = cv2.getRotationMatrix2D(center, median_angle, 1.0)
+        rotation_matrix = cv2.getRotationMatrix2D(center, correction_angle, 1.0)
         return cv2.warpAffine(
             image,
             rotation_matrix,
@@ -169,6 +170,14 @@ class OpenCVPreprocessor(PipelineStep):
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=0,
         )
+
+    @staticmethod
+    def _normalise_deskew_angle(angle: float) -> float:
+        """Convert an OpenCV rectangle angle to a small rotation correction."""
+        normalized = angle % 90.0
+        if normalized > 45.0:
+            normalized -= 90.0
+        return normalized
 
     def _resolve_output_dir(self, context: PipelineContext) -> Path:
         """Resolve where preprocessed images should be written."""
