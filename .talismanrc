@@ -1,0 +1,6 @@
+fileignoreconfig:
+- filename: .github/workflows/project-sync.yml
+  checksum: 02b4d0b19f05491a7c0d4f3f4b9dd1a7d9e22cedc6ce8fcef85975a6e2888541
+- filename: TODO.md
+  checksum: fb1f0e179e61bb5344bfaab8d4c4585993cacbbc1a5eeea2b6af9d3f0d9f5f04
+version: "1.0"
