@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running, and Phase 2 pipeline infrastructure is in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -235,6 +235,7 @@ ai-file-converter/
 │   │   │       └── jobs_stream.py # GET /jobs/{id}/stream (SSE)
 │   │   ├── core/                   # Config (pydantic-settings), database
 │   │   ├── models/                 # SQLAlchemy ORM (Job model)
+│   │   ├── pipeline/               # PipelineContext, PipelineStep, orchestrator, progress publisher
 │   │   ├── schemas/                # Pydantic request/response models
 │   │   ├── storage/                # Storage adapter (LocalStorage, ABC)
 │   │   └── tasks/                  # Celery app + placeholder pipeline
@@ -269,6 +270,12 @@ class PipelineStep(ABC):
 ```
 
 Concrete implementations: `PyMuPDFParser`, `OpenCVPreprocessor`, `YOLOSegmenter`, `ezdxfWriter`, etc. New approaches drop in without changing `Pipeline.run()`.
+
+Implemented foundation:
+- `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
+- `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
+- `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
+- `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
 ### 8.2 Observer / Pub-Sub — Progress Reporting
 Workers publish progress events to **Redis Pub/Sub**. The FastAPI SSE endpoint subscribes and forwards events to the browser. This decouples the worker from the web layer and lets multiple workers report independently.
@@ -340,6 +347,8 @@ result = Pipeline([
 - [x] Conversion options UI (2D/3D, DPI, floor height, output format)
 
 ### Phase 2 — PDF Parsing & Preprocessing
+- [x] Pluggable backend pipeline framework (`PipelineContext`, `PipelineStep`, `Pipeline.run()`)
+- [x] Redis Pub/Sub progress publisher for pipeline steps
 - PyMuPDF integration → extract pages as images
 - OpenCV preprocessing pipeline
 - Page preview in frontend
@@ -577,4 +586,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.2 — updated to reflect Phase 1 implementation (scaffolding & upload flow).*
+*Document version 0.3 — updated to reflect Phase 1 implementation and Phase 2 pipeline infrastructure.*

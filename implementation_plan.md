@@ -1,12 +1,29 @@
 # Implementation Plan
 
 [Overview]
-Implement fully functional frontend and backend services in the empty `frontend/` and `backend/` directories, covering TODO.md user stories US-002 through US-009.
+Implement fully functional frontend and backend services in the empty `frontend/` and `backend/` directories, covering TODO.md user stories US-002 through US-009. Stage 2 begins with US-012, which adds the pluggable backend pipeline infrastructure required before PDF parsing, preprocessing, segmentation, vectorization, and writer steps can be implemented.
 
 The user's directive is to fill the empty `frontend/` and `backend/` directories with accurate, working code so that both services are fully functional and running. This spans multiple user stories from TODO.md: US-002 (Docker Compose), US-003 (linting), US-005 (FastAPI skeleton), US-006 (PostgreSQL + SQLAlchemy), US-007 (Celery + Redis), US-008 (File Upload API), and US-009 (Next.js 14 landing page with DropZone). The backend will be a FastAPI application with async PostgreSQL, Celery workers, and a file upload endpoint. The frontend will be a Next.js 14 App Router project with TypeScript, TailwindCSS, a drag-and-drop upload zone, and conversion options. A `docker-compose.yml` at the root will orchestrate all 5 services (frontend, backend, worker, postgres, redis). The implementation follows the architecture defined in README.md sections 1-7.
 
 [Types]
 Type system changes span both Python (Pydantic models, SQLAlchemy models, dataclasses) and TypeScript (interfaces mirroring backend schemas).
+
+### Stage 2 Pipeline Types (Python)
+
+```python
+# backend/app/pipeline/context.py
+@dataclass
+class PipelineContext:
+    job_id: str
+    input_path: Path
+    config: dict[str, Any]
+    page_images: list[Path]
+    preprocessed: list[Any]
+    masks: dict[str, Any]
+    primitives: list[Any]
+    output_path: Path | None
+    metadata: dict[str, Any]
+```
 
 ### Backend Types (Python)
 
@@ -105,6 +122,10 @@ File modifications span backend Python package, frontend Next.js project, Docker
 - `backend/app/tasks/__init__.py` — empty package init
 - `backend/app/tasks/celery_app.py` — Celery app instance with Redis broker/backend
 - `backend/app/tasks/placeholder.py` — Dummy Celery task that simulates processing
+- `backend/app/pipeline/context.py` — `PipelineContext` dataclass and progress publisher protocol
+- `backend/app/pipeline/orchestrator.py` — `Pipeline` runner that executes steps in order
+- `backend/app/pipeline/progress.py` — Redis Pub/Sub progress publishing helper
+- `backend/app/pipeline/steps/base.py` — `PipelineStep` abstract base class
 - `backend/alembic.ini` — Alembic configuration pointing to `alembic/` directory
 - `backend/alembic/env.py` — Alembic environment script (async)
 - `backend/alembic/script.py.mako` — migration template

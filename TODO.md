@@ -1,11 +1,10 @@
 # TODO — AI File Converter Implementation Tracker
+[![CI](https://github.com/Josh-Uvi/DrawLift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Josh-Uvi/DrawLift/actions/workflows/ci.yml)
 
 > Living document that decomposes the [README.md](./README.md) architecture into actionable work.
 > Structure follows GitHub Issues–style tracking: **Stages → Epics (Milestones/Labels) → User Stories (Issues) → Tasks (sub-checklists)**.
 > Each item includes priority, effort estimate, acceptance criteria, and dependencies.
 > Issue management is driven by the **GitHub CLI (`gh`)** and/or the **GitHub MCP server** — no Linear dependency.
-
----
 
 ## Conventions
 
@@ -40,7 +39,7 @@
 |---|---|---|---|---|---|
 | 0 | **Bootstrap** | Repo, tooling, CI scaffold | 🚧 In Progress | 4 | 12 |
 | 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | 👀 In Review | 5 | 18 |
-| 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | ⬜ Backlog | 4 | 14 |
+| 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | 🚧 In Progress | 4 | 14 |
 | 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | ⬜ Backlog | 5 | 16 |
 | 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | ⬜ Backlog | 4 | 12 |
 | 5 | **Phase 5 — Polish & DWG** | Production-ready with DWG export | ⬜ Backlog | 6 | 20 |
@@ -55,6 +54,7 @@
 |---|---|---|---|---|
 | 2025-07-22 | Stage 0 — US-001 | [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged) | US-001 | Monorepo layout, `.gitignore`, `LICENSE`, `README.md` |
 | 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open) | US-002 → US-011 | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming, and pre-commit quality gates. |
+| 2026-07-23 | Stage 2 — US-012 | Not opened | US-012 | Pipeline framework, context dataclass, ordered orchestrator, and Redis Pub/Sub progress publisher prepared on `feat/us-012-pipeline-infrastructure`. |
 
 ---
 
@@ -236,17 +236,17 @@
 ## Epic 2.1 — Pipeline Infrastructure
 
 ### US-012 · As a backend dev, I want a pluggable pipeline framework
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p2-pdf`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
-  - [ ] `PipelineStep` ABC defined
-  - [ ] `PipelineContext` dataclass defined
-  - [ ] `Pipeline.run()` executes steps in order
-  - [ ] Each step can publish progress to Redis
+  - [x] `PipelineStep` ABC defined
+  - [x] `PipelineContext` dataclass defined
+  - [x] `Pipeline.run()` executes steps in order
+  - [x] Each step can publish progress to Redis
 - **Tasks:**
-  - [ ] T-039 — Create `backend/app/pipeline/steps/base.py` with `PipelineStep` ABC
-  - [ ] T-040 — Create `backend/app/pipeline/context.py`
-  - [ ] T-041 — Create `backend/app/pipeline/__init__.py` orchestrator
-  - [ ] T-042 — Add progress publishing helper (Redis Pub/Sub)
+  - [x] T-039 — Create `backend/app/pipeline/steps/base.py` with `PipelineStep` ABC
+  - [x] T-040 — Create `backend/app/pipeline/context.py`
+  - [x] T-041 — Create `backend/app/pipeline/__init__.py` orchestrator
+  - [x] T-042 — Add progress publishing helper (Redis Pub/Sub)
 
 ### US-013 · As a backend dev, I want PyMuPDF-based PDF page extraction
 - **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p2-pdf`
@@ -737,4 +737,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.2 — updated 2025-07-23 to reflect Phase 1 implementation (PR [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) + [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)). US-001 ✅ Done; US-002 → US-011 👀 In Review.*
+*Document version 0.3 — updated 2026-07-23 to reflect Phase 1 implementation and US-012 pipeline infrastructure progress. US-001 ✅ Done; US-002 → US-012 👀 In Review.*
