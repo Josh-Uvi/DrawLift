@@ -30,7 +30,8 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
-  projects: write
+  # Note: User-owned Projects v2 require a PAT with 'project' scope.
+  # Set a PROJECT_TOKEN secret; the workflow uses it via the fallback below.
 
 jobs:
   sync-project:
