@@ -5,10 +5,16 @@
 # move its card to the correct column on the board without human intervention.
 #
 #   - Issue opened / reopened   -> Todo
-#   - PR opened (closes #N)     -> In Progress  (and adds status:in-review)
-#   - PR merged / closed        -> Done         (auto-closes linked issues)
-#   - Commit pushed to main that contains "Closes #N" / "Fixes #N" -> Done
-#   - Issue closed              -> Done
+#   - PR opened / synchronized   -> In Review
+#   - PR merged / closed         -> Done (if all acceptance criteria checked)
+#                                 -> In Review (if criteria partially complete)
+#   - Commit pushed to main with "Closes #N" -> Done (if all criteria checked)
+#                                              -> In Review (if partial)
+#   - Issue closed               -> Done (if all criteria checked)
+#                                 -> In Review (if criteria partially complete)
+#
+# Uses curl + jq directly (no actions/github-script) to avoid Node 20
+# deprecation warnings and give full control over error handling.
 # ----------------------------------------------------------------------------
 name: Project Sync
 
@@ -24,170 +30,312 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  projects: write
 
 jobs:
   sync-project:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Sync issue/PR to project board
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.PROJECT_TOKEN || secrets.GITHUB_TOKEN }}
-          script: |
-            // ----------------------------------------------------------------
-            // Configuration: project + status field + option ids
-            // ----------------------------------------------------------------
-            const PROJECT_NUMBER   = 1;
-            const PROJECT_OWNER    = 'Josh-Uvi';
-            const STATUS_FIELD     = 'Status';
-            const COLUMN_TODO      = 'Todo';
-            const COLUMN_PROGRESS  = 'In Progress';
-            const COLUMN_REVIEW    = 'Done';     // we use "Done" for in-review too
-            const COLUMN_DONE      = 'Done';
-            // ----------------------------------------------------------------
-            // 1) Find the project + the Status field + each option id
-            // ----------------------------------------------------------------
-            const projectQuery = `
-              query($login: String!, $number: Int!) {
-                user(login: $login) {
-                  projectV2(number: $number) {
-                    id
-                    fields(first: 50) {
-                      nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options { id name }
-                        }
-                      }
+        env:
+          PROJECT_NUMBER: "1"
+          PROJECT_OWNER: "Josh-Uvi"
+        run: |
+          set -uo pipefail
+
+          # ----------------------------------------------------------------
+          # Configuration
+          # ----------------------------------------------------------------
+          STATUS_FIELD_NAME="Status"
+          COL_TODO="Todo"
+          COL_PROGRESS="In Progress"
+          COL_REVIEW="In Review"
+          COL_DONE="Done"
+          API_URL="https://api.github.com/graphql"
+
+          # ----------------------------------------------------------------
+          # Helper: execute a GraphQL query/mutation via curl
+          # ----------------------------------------------------------------
+          graphql() {
+            local query="$1"
+            local vars="$2"
+            local payload
+            payload=$(jq -n --arg q "$query" --argjson v "$vars" '{query: $q, variables: $v}')
+            curl -s --retry 3 -X POST "$API_URL" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload"
+          }
+
+          # ----------------------------------------------------------------
+          # 1) Query project + status field + option IDs
+          # ----------------------------------------------------------------
+          QUERY='query($login: String!, $number: Int!) {
+            user(login: $login) {
+              projectV2(number: $number) {
+                id
+                fields(first: 50) {
+                  nodes {
+                    ... on ProjectV2SingleSelectField {
+                      id
+                      name
+                      options { id name }
                     }
                   }
                 }
-              }`;
-            const proj = await github.graphql(projectQuery, {
-              login: PROJECT_OWNER, number: PROJECT_NUMBER,
-            });
-            const projectId = proj.user.projectV2.id;
-            const statusField = proj.user.projectV2.fields.nodes
-              .find(f => f.name === STATUS_FIELD);
-            if (!statusField) {
-              core.warning(`Project ${PROJECT_NUMBER} has no "${STATUS_FIELD}" field`);
-              return;
-            }
-            const opt = name => statusField.options.find(o => o.name === name);
-            const OPT = {
-              todo:     opt(COLUMN_TODO)?.id,
-              progress: opt(COLUMN_PROGRESS)?.id,
-              done:     opt(COLUMN_DONE)?.id,
-            };
-
-            // ----------------------------------------------------------------
-            // 2) Helper: add an issue/PR to the project (no-op if already there)
-            // ----------------------------------------------------------------
-            async function addToProject(contentId) {
-              const mutation = `
-                mutation($project: ID!, $content: ID!) {
-                  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
-                    item { id }
-                  }
-                }`;
-              try {
-                const r = await github.graphql(mutation, {project: projectId, content: contentId});
-                return r.addProjectV2ItemById.item.id;
-              } catch (e) {
-                // item may already exist
-                return null;
               }
             }
+          }'
 
-            async function setStatus(itemId, optionId) {
-              if (!itemId || !optionId) return;
-              const mutation = `
-                mutation($project: ID!, $item: ID!, $field: ID!, $option: ID!) {
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $project, itemId: $item,
-                    fieldId: $field, value: { singleSelectOptionId: $option }
-                  }) { projectV2Item { id } }
-                }`;
-              try {
-                await github.graphql(mutation, {
-                  project: projectId, item: itemId,
-                  field: statusField.id, option: optionId,
-                });
-              } catch (e) {
-                core.warning(`Could not set status: ${e.message}`);
+          VARS=$(jq -n --arg login "$PROJECT_OWNER" --argjson number "$PROJECT_NUMBER" '{login: $login, number: $number}')
+          RESULT=$(graphql "$QUERY" "$VARS")
+
+          # Check for GraphQL errors
+          ERRORS=$(echo "$RESULT" | jq -r '.errors[0].message // empty')
+          if [ -n "$ERRORS" ]; then
+            echo "::warning::GraphQL error: $ERRORS"
+            echo "::warning::If using GITHUB_TOKEN, set a PROJECT_TOKEN secret with a PAT that has 'project' scope."
+            exit 0
+          fi
+
+          PROJECT_ID=$(echo "$RESULT" | jq -r '.data.user.projectV2.id // empty')
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+            echo "::warning::Project #$PROJECT_NUMBER not found for user '$PROJECT_OWNER'."
+            echo "::warning::If using GITHUB_TOKEN, set a PROJECT_TOKEN secret with a PAT that has 'project' scope."
+            exit 0
+          fi
+
+          echo "Found project: $PROJECT_ID"
+
+          # Get status field ID
+          STATUS_FIELD_ID=$(echo "$RESULT" | jq -r --arg name "$STATUS_FIELD_NAME" \
+            '.data.user.projectV2.fields.nodes[] | select(.name == $name) | .id' | head -1)
+
+          if [ -z "$STATUS_FIELD_ID" ]; then
+            echo "::warning::Project has no \"$STATUS_FIELD_NAME\" field"
+            exit 0
+          fi
+
+          # Helper: get option ID by name
+          get_opt() {
+            echo "$RESULT" | jq -r --arg name "$1" \
+              '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == $name) | .id' | head -1
+          }
+
+          OPT_TODO=$(get_opt "$COL_TODO")
+          OPT_PROGRESS=$(get_opt "$COL_PROGRESS")
+          OPT_REVIEW=$(get_opt "$COL_REVIEW")
+          OPT_DONE=$(get_opt "$COL_DONE")
+
+          # ----------------------------------------------------------------
+          # 2) Helper functions
+          # ----------------------------------------------------------------
+          add_to_project() {
+            local content_id="$1"
+            local mutation='mutation($project: ID!, $content: ID!) {
+              addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
+                item { id }
               }
-            }
+            }'
+            local vars
+            vars=$(jq -n --arg project "$PROJECT_ID" --arg content "$content_id" '{project: $project, content: $content}')
+            local result
+            result=$(graphql "$mutation" "$vars")
+            echo "$result" | jq -r '.data.addProjectV2ItemById.item.id // empty'
+          }
 
-            async function findExistingItem(contentId) {
-              const q = `
-                query($project: ID!) {
-                  node(id: $project) {
-                    ... on ProjectV2 {
-                      items(first: 100) {
-                        nodes { id content { ... on Issue { id } ... on PullRequest { id } } }
-                      }
-                    }
+          find_existing_item() {
+            local content_id="$1"
+            local query='query($project: ID!) {
+              node(id: $project) {
+                ... on ProjectV2 {
+                  items(first: 100) {
+                    nodes { id content { ... on Issue { id } ... on PullRequest { id } } }
                   }
-                }`;
-              const r = await github.graphql(q, {project: projectId});
-              return r.node.items.nodes.find(n => n.content?.id === contentId)?.id || null;
-            }
-
-            // ----------------------------------------------------------------
-            // 3) Decide target column from the event payload
-            // ----------------------------------------------------------------
-            const event = context.eventName;
-            let contentId, action, target;
-
-            if (event === 'issues') {
-              contentId = context.payload.issue.node_id;
-              action = context.payload.action;            // opened|reopened|closed|edited
-              target = action === 'closed' ? OPT.done
-                     : (action === 'reopened' ? OPT.todo : OPT.todo);
-            } else if (event === 'pull_request') {
-              contentId = context.payload.pull_request.node_id;
-              const a = context.payload.action;           // opened|reopened|closed|...
-              const merged = context.payload.pull_request.merged === true;
-              if (merged || a === 'closed') {
-                target = OPT.done;
-              } else {
-                target = OPT.progress;
-              }
-            } else if (event === 'push') {
-              // Walk the commit messages looking for issue references like
-              // "Closes #12" or "Fixes #34" and close them -> Done.
-              const re = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
-              const messages = (context.payload.commits || []).map(c => c.message).join('\n');
-              const matches = [...new Set([...messages.matchAll(re)].map(m => parseInt(m[1], 10)))];
-              for (const num of matches) {
-                try {
-                  const { data: issue } = await github.rest.issues.get({
-                    owner: context.repo.owner, repo: context.repo.repo, issue_number: num,
-                  });
-                  if (issue.state === 'open') {
-                    await github.rest.issues.update({
-                      owner: context.repo.owner, repo: context.repo.repo,
-                      issue_number: num, state: 'closed',
-                    });
-                  }
-                  const id = issue.node_id;
-                  const itemId = (await findExistingItem(id)) || (await addToProject(id));
-                  await setStatus(itemId, OPT.done);
-                } catch (e) {
-                  core.warning(`Push handler failed for #${num}: ${e.message}`);
                 }
               }
-              return;
-            } else {
-              return;
-            }
+            }'
+            local vars
+            vars=$(jq -n --arg project "$PROJECT_ID" '{project: $project}')
+            local result
+            result=$(graphql "$query" "$vars")
+            echo "$result" | jq -r --arg id "$content_id" \
+              '.data.node.items.nodes[] | select(.content.id == $id) | .id' | head -1
+          }
 
-            if (!contentId) return;
+          set_status() {
+            local item_id="$1"
+            local option_id="$2"
+            [ -z "$item_id" ] && return
+            [ -z "$option_id" ] && return
+            local mutation='mutation($project: ID!, $item: ID!, $field: ID!, $option: ID!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $project, itemId: $item,
+                fieldId: $field, value: { singleSelectOptionId: $option }
+              }) { projectV2Item { id } }
+            }'
+            local vars
+            vars=$(jq -n --arg project "$PROJECT_ID" --arg item "$item_id" --arg field "$STATUS_FIELD_ID" --arg option "$option_id" \
+              '{project: $project, item: $item, field: $field, option: $option}')
+            local result
+            result=$(graphql "$mutation" "$vars")
+            if echo "$result" | jq -e '.errors' >/dev/null 2>&1; then
+              echo "::warning::Could not set status: $(echo "$result" | jq -r '.errors[0].message // empty')"
+            fi
+          }
 
-            // ----------------------------------------------------------------
-            // 4) Apply: ensure the card exists on the board, then set Status
-            // ----------------------------------------------------------------
-            const itemId = (await findExistingItem(contentId)) || (await addToProject(contentId));
-            await setStatus(itemId, target);
-            core.info(`Moved ${contentId} to ${Object.keys(OPT).find(k => OPT[k] === target)}`);
+          # ----------------------------------------------------------------
+          # 2b) Acceptance criteria checker
+          # ----------------------------------------------------------------
+          # Fetches the issue body and counts checked vs unchecked checkboxes.
+          # Returns "done" if all checkboxes are checked, "review" if partial,
+          # "done" if there are no checkboxes at all.
+          check_acceptance_criteria() {
+            local issue_number="$1"
+            local issue_body
+            issue_body=$(curl -s --retry 3 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$issue_number" \
+              | jq -r '.body // empty')
+
+            if [ -z "$issue_body" ]; then
+              echo "done"
+              return
+            fi
+
+            local total checked unchecked
+            total=$(echo "$issue_body" | grep -cE '^\s*- \[[ xX]\]' || echo 0)
+            checked=$(echo "$issue_body" | grep -cE '^\s*- \[[xX]\]' || echo 0)
+            unchecked=$(echo "$issue_body" | grep -cE '^\s*- \[ \]' || echo 0)
+
+            echo "Issue #$issue_number: $checked checked, $unchecked unchecked, $total total checkboxes"
+
+            if [ "$total" -eq 0 ]; then
+              echo "done"
+              return
+            fi
+
+            if [ "$unchecked" -eq 0 ]; then
+              echo "done"
+            else
+              echo "review"
+            fi
+          }
+
+          # ----------------------------------------------------------------
+          # 3) Determine target column from event
+          # ----------------------------------------------------------------
+          EVENT_NAME="$GITHUB_EVENT_NAME"
+          EVENT_PATH="$GITHUB_EVENT_PATH"
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            # Walk commit messages for "Closes #N" / "Fixes #N"
+            MESSAGES=$(jq -r '.commits[].message // empty' "$EVENT_PATH")
+            for num in $(echo "$MESSAGES" | grep -oiE '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#[0-9]+' | grep -oE '[0-9]+' | sort -u); do
+              echo "Processing issue #$num from commit message"
+              ISSUE_JSON=$(curl -s --retry 3 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num")
+              ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty')
+              ISSUE_NODE_ID=$(echo "$ISSUE_JSON" | jq -r '.node_id // empty')
+
+              if [ -z "$ISSUE_NODE_ID" ]; then
+                echo "::warning::Could not fetch issue #$num"
+                continue
+              fi
+
+              if [ "$ISSUE_STATE" = "open" ]; then
+                curl -s --retry 3 -X PATCH \
+                  -H "Authorization: Bearer $GH_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d '{"state": "closed"}' \
+                  "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num" >/dev/null
+              fi
+
+              # Check acceptance criteria before moving to Done
+              CRITERIA_RESULT=$(check_acceptance_criteria "$num")
+              if [ "$CRITERIA_RESULT" = "done" ]; then
+                TARGET="$OPT_DONE"
+              else
+                TARGET="$OPT_REVIEW"
+              fi
+
+              ITEM_ID=$(find_existing_item "$ISSUE_NODE_ID")
+              [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$ISSUE_NODE_ID")
+              set_status "$ITEM_ID" "$TARGET"
+            done
+            exit 0
+          fi
+
+          # For issues and PRs
+          CONTENT_ID=""
+          TARGET=""
+
+          if [ "$EVENT_NAME" = "issues" ]; then
+            CONTENT_ID=$(jq -r '.issue.node_id // empty' "$EVENT_PATH")
+            ACTION=$(jq -r '.action // empty' "$EVENT_PATH")
+            ISSUE_NUMBER=$(jq -r '.issue.number // empty' "$EVENT_PATH")
+            if [ "$ACTION" = "closed" ]; then
+              # Check acceptance criteria before moving to Done
+              CRITERIA_RESULT=$(check_acceptance_criteria "$ISSUE_NUMBER")
+              if [ "$CRITERIA_RESULT" = "done" ]; then
+                TARGET="$OPT_DONE"
+              else
+                TARGET="$OPT_REVIEW"
+              fi
+            else
+              TARGET="$OPT_TODO"
+            fi
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            CONTENT_ID=$(jq -r '.pull_request.node_id // empty' "$EVENT_PATH")
+            ACTION=$(jq -r '.action // empty' "$EVENT_PATH")
+            MERGED=$(jq -r '.pull_request.merged // false' "$EVENT_PATH")
+            if [ "$MERGED" = "true" ] || [ "$ACTION" = "closed" ]; then
+              # PR merged/closed — check linked issues for acceptance criteria
+              # Extract issue numbers from PR body (Closes #N, Fixes #N, etc.)
+              PR_BODY=$(jq -r '.pull_request.body // empty' "$EVENT_PATH")
+              ISSUE_NUMS=$(echo "$PR_BODY" | grep -oiE '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#[0-9]+' | grep -oE '[0-9]+' | sort -u)
+
+              if [ -n "$ISSUE_NUMS" ]; then
+                for num in $ISSUE_NUMS; do
+                  echo "Checking acceptance criteria for linked issue #$num"
+                  CRITERIA_RESULT=$(check_acceptance_criteria "$num")
+                  if [ "$CRITERIA_RESULT" = "done" ]; then
+                    TARGET="$OPT_DONE"
+                  else
+                    TARGET="$OPT_REVIEW"
+                  fi
+
+                  # Move the linked issue
+                  ISSUE_JSON=$(curl -s --retry 3 \
+                    -H "Authorization: Bearer $GH_TOKEN" \
+                    "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num")
+                  ISSUE_NODE_ID=$(echo "$ISSUE_JSON" | jq -r '.node_id // empty')
+                  if [ -n "$ISSUE_NODE_ID" ]; then
+                    ITEM_ID=$(find_existing_item "$ISSUE_NODE_ID")
+                    [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$ISSUE_NODE_ID")
+                    set_status "$ITEM_ID" "$TARGET"
+                  fi
+                done
+              fi
+              # Also move the PR itself to Done or In Review
+              TARGET="$OPT_DONE"
+            else
+              # PR opened/synchronized/reopened -> In Review
+              TARGET="$OPT_REVIEW"
+            fi
+          fi
+
+          [ -z "$CONTENT_ID" ] && exit 0
+          [ -z "$TARGET" ] && exit 0
+
+          # ----------------------------------------------------------------
+          # 4) Apply: ensure card exists, then set Status
+          # ----------------------------------------------------------------
+          ITEM_ID=$(find_existing_item "$CONTENT_ID")
+          [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$CONTENT_ID")
+          set_status "$ITEM_ID" "$TARGET"
+
+          echo "Synced item to project board"

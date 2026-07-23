@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Architecture & design document. Implementation follows the phased roadmap at the bottom.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -104,31 +104,24 @@ class PipelineContext:
 ```
 frontend/src/
 ├── app/
-│   ├── layout.tsx                # Root layout, nav, theme provider
+│   ├── globals.css               # TailwindCSS global styles
+│   ├── layout.tsx                # Root layout, metadata, Toaster
 │   ├── page.tsx                  # Landing / upload page
-│   ├── jobs/[id]/page.tsx        # Job detail: live progress, preview, download
-│   └── history/page.tsx          # Past conversions list (paginated)
+│   └── jobs/[id]/page.tsx        # Job detail: live progress via SSE
 │
 ├── components/
 │   ├── upload/
 │   │   ├── DropZone.tsx          # Drag & drop (react-dropzone)
-│   │   ├── FilePreview.tsx       # PDF thumbnail + metadata
-│   │   └── ConversionOptions.tsx # 2D/3D toggle, scale, floor height
-│   │
+│   │   └── ConversionOptions.tsx # 2D/3D toggle, DPI, floor height, format
 │   ├── job/
-│   │   ├── ProgressTracker.tsx   # Stepper: Uploaded → Processing → Completed
-│   │   ├── PageViewer.tsx        # Side-by-side original vs. wireframe
-│   │   └── DownloadButton.tsx    # Download DWG/DXF
-│   │
+│   │   └── ProgressTracker.tsx   # Stepper: Uploaded → Processing → Completed
 │   └── shared/
 │       ├── Button.tsx
-│       ├── Card.tsx
-│       └── Toast.tsx             # sonner notifications
+│       └── Card.tsx
 │
 ├── lib/
-│   ├── api.ts                    # Typed fetch wrapper
-│   ├── sse.ts                    # EventSource helper for progress
-│   └── utils.ts
+│   ├── api.ts                    # Typed fetch wrapper (uploadFile, getJob, listJobs)
+│   └── sse.ts                    # EventSource helper for progress streaming
 │
 └── types/
     └── api.ts                    # Mirrors backend Pydantic schemas
@@ -216,11 +209,20 @@ ai-file-converter/
 ├── frontend/                       # Next.js 14 (App Router)
 │   ├── src/
 │   │   ├── app/                    # Pages (App Router)
-│   │   ├── components/             # React components
-│   │   ├── lib/                    # API client, SSE helper, utils
+│   │   │   ├── layout.tsx         # Root layout + Toaster
+│   │   │   ├── page.tsx           # Landing / upload page
+│   │   │   ├── globals.css        # TailwindCSS globals
+│   │   │   └── jobs/[id]/page.tsx # Job detail with live progress
+│   │   ├── components/            # React components
+│   │   │   ├── upload/            # DropZone, ConversionOptions
+│   │   │   ├── job/               # ProgressTracker
+│   │   │   └── shared/            # Button, Card
+│   │   ├── lib/                    # API client, SSE helper
 │   │   └── types/                  # TypeScript types (mirror backend schemas)
+│   ├── public/                    # Static assets
 │   ├── tailwind.config.ts
 │   ├── next.config.js
+│   ├── tsconfig.json
 │   ├── package.json
 │   └── Dockerfile
 │
@@ -228,34 +230,24 @@ ai-file-converter/
 │   ├── app/
 │   │   ├── api/
 │   │   │   └── v1/
-│   │   │       ├── jobs.py
-│   │   │       └── health.py
-│   │   ├── core/                   # Config, settings (pydantic-settings)
-│   │   ├── models/                 # SQLAlchemy models
+│   │   │       ├── health.py      # GET /health
+│   │   │       ├── jobs.py        # POST /jobs, GET /jobs/{id}, GET /jobs
+│   │   │       └── jobs_stream.py # GET /jobs/{id}/stream (SSE)
+│   │   ├── core/                   # Config (pydantic-settings), database
+│   │   ├── models/                 # SQLAlchemy ORM (Job model)
 │   │   ├── schemas/                # Pydantic request/response models
-│   │   ├── services/               # Business logic (orchestration)
-│   │   ├── tasks/                  # Celery task definitions
-│   │   ├── storage/                # Storage adapters (local / S3)
-│   │   └── pipeline/               # The conversion pipeline
-│   │       ├── __init__.py         # Pipeline orchestrator
-│   │       ├── context.py          # PipelineContext dataclass
-│   │       ├── steps/              # Pluggable steps
-│   │       │   ├── base.py         # PipelineStep ABC
-│   │       │   ├── pdf_parser.py   # Step 1
-│   │       │   ├── preprocessor.py # Step 2
-│   │       │   ├── segmenter.py    # Step 3
-│   │       │   ├── vectorizer.py   # Step 4
-│   │       │   ├── extruder.py     # Step 5
-│   │       │   └── dwg_writer.py   # Step 6
-│   │       └── primitives.py       # Wall, Door, Window, Slab dataclasses
-│   ├── tests/                      # pytest + fixtures
-│   ├── alembic/                    # DB migrations
+│   │   ├── storage/                # Storage adapter (LocalStorage, ABC)
+│   │   └── tasks/                  # Celery app + placeholder pipeline
+│   ├── tests/                      # pytest + fixtures (test_health.py)
+│   ├── alembic/                    # DB migrations (0001_create_jobs_table)
 │   ├── requirements.txt
-│   ├── Dockerfile
-│   └── pyproject.toml
+│   ├── pyproject.toml              # ruff, mypy config
+│   └── Dockerfile
 │
-├── docker-compose.yml              # Orchestrates all services
-├── .env.example
+├── scripts/                        # GitHub bootstrap & issue creation
+├── docker-compose.yml              # Orchestrates all 5 services
+├── .env.example                    # Environment variables template
+├── .talismanrc                     # Pre-push hook config
 ├── README.md                       # ← you are here (architecture)
 └── TODO.md                         # Execution tracker (GitHub Issues)
 ```
@@ -337,11 +329,14 @@ result = Pipeline([
 
 ## 10. Implementation Phases
 
-### Phase 1 — Scaffolding & Upload Flow (MVP skeleton)
-- Docker Compose with all 5 services
-- File upload endpoint + Next.js drag-and-drop
-- Job creation in DB, PDF stored locally
-- Placeholder pipeline that just extracts page count
+### Phase 1 — Scaffolding & Upload Flow (MVP skeleton) ✅ Complete
+- [x] Docker Compose with all 5 services (frontend, backend, worker, postgres, redis)
+- [x] File upload endpoint (`POST /api/v1/jobs`) + Next.js drag-and-drop (DropZone)
+- [x] Job creation in DB (PostgreSQL via SQLAlchemy + Alembic), PDF stored locally
+- [x] Placeholder Celery pipeline that simulates conversion with progress updates
+- [x] SSE progress streaming (`GET /api/v1/jobs/{id}/stream`) via Redis Pub/Sub
+- [x] Frontend job detail page with live ProgressTracker
+- [x] Conversion options UI (2D/3D, DPI, floor height, output format)
 
 ### Phase 2 — PDF Parsing & Preprocessing
 - PyMuPDF integration → extract pages as images
@@ -369,23 +364,31 @@ result = Pipeline([
 ## 11. Python Dependencies (Key Libraries)
 
 ```text
-# backend/requirements.txt
+# backend/requirements.txt (implemented)
 fastapi==0.115.*
-uvicorn[standard]
+uvicorn[standard]==0.34.*
 celery[redis]==5.*
 sqlalchemy[asyncio]==2.*
-asyncpg
-pydantic-settings
-python-multipart          # file uploads
-pymupdf                   # PDF parsing
-opencv-python-headless    # image preprocessing
-numpy
-ezdxf                     # DXF generation (reliable, open)
-# libredwg (system-level) # optional DWG support
-onnxruntime               # production inference
-# torch + ultralytics     # training / fine-tuning
-pytest pytest-asyncio     # tests
-alembic                   # migrations
+asyncpg==0.30.*
+pydantic-settings==2.*
+python-multipart==0.0.*  # file uploads
+alembic==1.*              # migrations
+redis==5.*               # Celery broker + Pub/Sub
+sse-starlette==2.*       # SSE streaming
+ruff==0.8.*              # linting
+mypy==1.*                # type checking
+pytest==8.*              # testing
+pytest-asyncio==0.24.*
+httpx==0.28.*            # test client
+
+# Planned for Phase 2+ (not yet installed)
+# pymupdf                   # PDF parsing
+# opencv-python-headless    # image preprocessing
+# numpy
+# ezdxf                     # DXF generation (reliable, open)
+# libredwg (system-level)   # optional DWG support
+# onnxruntime               # production inference
+# torch + ultralytics       # training / fine-tuning
 ```
 
 ```jsonc
@@ -405,33 +408,65 @@ alembic                   # migrations
 
 ---
 
-## 12. Local Development (Quick Start — Future)
+## 12. Local Development (Quick Start)
 
-Once implementation begins:
+The application is fully runnable via Docker Compose:
 
 ```bash
 # 1. Clone & configure
 cp .env.example .env
 
-# 2. Boot all services
-docker compose up -d
+# 2. Boot all 5 services (frontend, backend, worker, postgres, redis)
+docker compose up -d --build
 
 # 3. Run DB migrations
 docker compose exec backend alembic upgrade head
 
 # 4. Open the app
-open http://localhost:3000
+open http://localhost:3000      # Frontend (Next.js)
+open http://localhost:8000/api/v1/health  # Backend health check
 ```
 
-Services exposed:
+### Services
 
-| Service     | Port  |
-|-------------|-------|
-| Frontend    | 3000  |
-| FastAPI     | 8000  |
-| PostgreSQL  | 5432  |
-| Redis       | 6379  |
-| Flower (Celery UI) | 5555 |
+| Service     | Port  | Description |
+|-------------|-------|-------------|
+| Frontend    | 3000  | Next.js 14 App Router |
+| FastAPI     | 8000  | Backend API + SSE streaming |
+| PostgreSQL  | 5432  | Job metadata database |
+| Redis       | 6379  | Celery broker + Pub/Sub for SSE |
+| Worker      | —     | Celery worker (shares backend image) |
+
+### Development without Docker
+
+**Backend:**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Linting & Tests
+
+```bash
+# Backend
+cd backend
+ruff check .          # linting
+mypy app/             # type checking
+pytest                # tests
+
+# Frontend
+cd frontend
+npm run lint          # ESLint
+npm run build         # production build
+```
 
 ---
 
@@ -520,4 +555,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.1 — generated as part of the architecture design phase.*
+*Document version 0.2 — updated to reflect Phase 1 implementation (scaffolding & upload flow).*

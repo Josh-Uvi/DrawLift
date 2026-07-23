@@ -1,6 +1,16 @@
 fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
-  checksum: 02b4d0b19f05491a7c0d4f3f4b9dd1a7d9e22cedc6ce8fcef85975a6e2888541
+  checksum: 58c954569cbf657b3c79ce3a7cf4837559b403bc1596c16df444c0800043e8ae
 - filename: TODO.md
-  checksum: fb1f0e179e61bb5344bfaab8d4c4585993cacbbc1a5eeea2b6af9d3f0d9f5f04
+  checksum: 0176a7cb3bfcce826555a64c6470b2f0fefa9df0be37d82f4455d9cfecc9a859
+- filename: .env.example
+  checksum: 300c0cac552c54660180ce29f391bc21617ac74830be6332684f5bef55de301c
+- filename: backend/alembic/env.py
+  checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
+- filename: frontend/package-lock.json
+  checksum: a26ddaa355447c976f113efb02c3724f0032fa3a32dca6ec6454be6c33f0df9f
+- filename: backend/alembic.ini
+  checksum: c31c463716e44ae5cdc42f0b6332f601a15acbd071f479b15daee24febb263a3
+- filename: .github/workflows/pr-agent.yml
+  checksum: 12009d3c73e21e8990847d78a7529df46ad319bfa2318c3bfe97210d06daa7b1
 version: "1.0"
