@@ -6,15 +6,17 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
 jobs:
   pr-agent:
     name: Review, describe, and improve pull requests
     if: ${{ github.event.sender.type != 'Bot' && (github.event_name == 'pull_request' || github.event.issue.pull_request != null) }}
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
-      contents: read
+    
     steps:
       - name: Run PR Agent
         id: pr-agent
