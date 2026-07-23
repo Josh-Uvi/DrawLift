@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running, and Phase 2 pipeline infrastructure is in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running, and Phase 2 pipeline infrastructure plus PyMuPDF page extraction are in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -235,7 +235,7 @@ ai-file-converter/
 │   │   │       └── jobs_stream.py # GET /jobs/{id}/stream (SSE)
 │   │   ├── core/                   # Config (pydantic-settings), database
 │   │   ├── models/                 # SQLAlchemy ORM (Job model)
-│   │   ├── pipeline/               # PipelineContext, PipelineStep, orchestrator, progress publisher
+│   │   ├── pipeline/               # PipelineContext, PipelineStep, PDF parser, orchestrator, progress publisher
 │   │   ├── schemas/                # Pydantic request/response models
 │   │   ├── storage/                # Storage adapter (LocalStorage, ABC)
 │   │   └── tasks/                  # Celery app + placeholder pipeline
@@ -269,7 +269,14 @@ class PipelineStep(ABC):
     def execute(self, context: PipelineContext) -> PipelineContext: ...
 ```
 
-Concrete implementations: `PyMuPDFParser`, `OpenCVPreprocessor`, `YOLOSegmenter`, `ezdxfWriter`, etc. New approaches drop in without changing `Pipeline.run()`.
+Concrete implementations: `PdfParserStep`, `OpenCVPreprocessor`, `YOLOSegmenter`, `ezdxfWriter`, etc. New approaches drop in without changing `Pipeline.run()`.
+
+Implemented foundation:
+- `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
+- `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
+- `backend/app/pipeline/steps/pdf_parser.py` implements PyMuPDF-backed PDF page extraction.
+- `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
+- `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
 Implemented foundation:
 - `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
@@ -311,7 +318,7 @@ The pipeline is a composed chain of steps. Each step is a pure function of the c
 
 ```python
 result = Pipeline([
-    PyMuPDFParser(dpi=300),
+    PdfParserStep(),
     OpenCVPreprocessor(denoise_strength=7),
     YOLOSegmenter(model="floorplan-v1", device="cpu"),
     ContourVectorizer(simplify_tolerance=2.0),
@@ -349,7 +356,7 @@ result = Pipeline([
 ### Phase 2 — PDF Parsing & Preprocessing
 - [x] Pluggable backend pipeline framework (`PipelineContext`, `PipelineStep`, `Pipeline.run()`)
 - [x] Redis Pub/Sub progress publisher for pipeline steps
-- PyMuPDF integration → extract pages as images
+- [x] PyMuPDF integration → extract pages as configurable-DPI PNG images
 - OpenCV preprocessing pipeline
 - Page preview in frontend
 
@@ -384,6 +391,7 @@ pydantic-settings==2.*
 python-multipart==0.0.*  # file uploads
 alembic==1.*              # migrations
 redis==5.*               # Celery broker + Pub/Sub
+pymupdf==1.*             # PDF page rendering
 sse-starlette==2.*       # SSE streaming
 ruff==0.8.*              # linting
 mypy==1.*                # type checking
@@ -393,7 +401,6 @@ pytest-asyncio==0.24.*
 httpx==0.28.*            # test client
 
 # Planned for Phase 2+ (not yet installed)
-# pymupdf                   # PDF parsing
 # opencv-python-headless    # image preprocessing
 # numpy
 # ezdxf                     # DXF generation (reliable, open)
@@ -586,4 +593,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.3 — updated to reflect Phase 1 implementation and Phase 2 pipeline infrastructure.*
+*Document version 0.4 — updated to reflect Phase 1 implementation and Phase 2 pipeline infrastructure plus PyMuPDF page extraction.*
