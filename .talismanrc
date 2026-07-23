@@ -12,5 +12,5 @@ fileignoreconfig:
 - filename: backend/alembic.ini
   checksum: c31c463716e44ae5cdc42f0b6332f601a15acbd071f479b15daee24febb263a3
 - filename: .github/workflows/pr-agent.yml
-  checksum: 69381df8e3b806e82c65ac05c9519736fd01fb53062aa472ca0a71f0bbba82df
+  checksum: 183a0a2a3e32f0b9874f724d0e32d8bdbe4d825227ae9ec624302a9ccf4e3bd0
 version: "1.0"
