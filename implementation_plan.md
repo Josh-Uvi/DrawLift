@@ -1,7 +1,7 @@
 # Implementation Plan
 
 [Overview]
-Implement fully functional frontend and backend services in the empty `frontend/` and `backend/` directories, covering TODO.md user stories US-002 through US-009. Stage 2 begins with US-012, which adds the pluggable backend pipeline infrastructure required before PDF parsing, preprocessing, segmentation, vectorization, and writer steps can be implemented.
+Implement fully functional frontend and backend services in the empty `frontend/` and `backend/` directories, covering TODO.md user stories US-002 through US-009. Stage 2 begins with US-012, which adds the pluggable backend pipeline infrastructure required before PDF parsing, preprocessing, segmentation, vectorization, and writer steps can be implemented. US-013 adds the first concrete pipeline implementation: PyMuPDF-based PDF page extraction that renders each page as a configurable-DPI PNG and stores the generated paths in `PipelineContext.page_images`.
 
 The user's directive is to fill the empty `frontend/` and `backend/` directories with accurate, working code so that both services are fully functional and running. This spans multiple user stories from TODO.md: US-002 (Docker Compose), US-003 (linting), US-005 (FastAPI skeleton), US-006 (PostgreSQL + SQLAlchemy), US-007 (Celery + Redis), US-008 (File Upload API), and US-009 (Next.js 14 landing page with DropZone). The backend will be a FastAPI application with async PostgreSQL, Celery workers, and a file upload endpoint. The frontend will be a Next.js 14 App Router project with TypeScript, TailwindCSS, a drag-and-drop upload zone, and conversion options. A `docker-compose.yml` at the root will orchestrate all 5 services (frontend, backend, worker, postgres, redis). The implementation follows the architecture defined in README.md sections 1-7.
 
@@ -126,12 +126,14 @@ File modifications span backend Python package, frontend Next.js project, Docker
 - `backend/app/pipeline/orchestrator.py` — `Pipeline` runner that executes steps in order
 - `backend/app/pipeline/progress.py` — Redis Pub/Sub progress publishing helper
 - `backend/app/pipeline/steps/base.py` — `PipelineStep` abstract base class
+- `backend/app/pipeline/steps/pdf_parser.py` — `PdfParserStep` that renders PDF pages to PNG images with PyMuPDF
 - `backend/alembic.ini` — Alembic configuration pointing to `alembic/` directory
 - `backend/alembic/env.py` — Alembic environment script (async)
 - `backend/alembic/script.py.mako` — migration template
 - `backend/alembic/versions/0001_create_jobs_table.py` — initial migration
 - `backend/tests/__init__.py` — empty package init
 - `backend/tests/test_health.py` — health endpoint test
+- `backend/tests/test_pdf_parser_step.py` — PyMuPDF page extraction, DPI, and progress tests
 - `backend/tests/conftest.py` — pytest fixtures
 
 ### New Files — Frontend
@@ -226,11 +228,15 @@ asyncpg==0.30.*
 pydantic-settings==2.*
 python-multipart==0.0.*
 alembic==1.*
+redis==5.*
+pymupdf==1.*
 ruff==0.8.*
 mypy==1.*
+pre-commit==4.*
 pytest==8.*
 pytest-asyncio==0.24.*
 httpx==0.28.*
+sse-starlette==2.*
 ```
 
 ### Frontend (npm) — `frontend/package.json`
@@ -266,6 +272,9 @@ Testing approach includes backend pytest tests and frontend build verification.
 ### Backend Tests
 
 - `backend/tests/test_health.py` — Tests `GET /api/v1/health` returns 200 and `{"status": "ok"}`
+- `backend/tests/test_pipeline.py` — Tests pipeline context defaults, ordered step execution, and orchestrator progress events
+- `backend/tests/test_pipeline_progress.py` — Tests Redis progress event serialization, channel naming, and progress normalization
+- `backend/tests/test_pdf_parser_step.py` — Tests PyMuPDF extraction, configurable DPI rendering, page image paths, and 20% progress reporting
 - `backend/tests/conftest.py` — Fixtures for async test client, test database
 
 ### Frontend Verification

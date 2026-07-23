@@ -55,6 +55,7 @@
 | 2025-07-22 | Stage 0 — US-001 | [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged) | US-001 | Monorepo layout, `.gitignore`, `LICENSE`, `README.md` |
 | 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open) | US-002 → US-011 | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming, and pre-commit quality gates. |
 | 2026-07-23 | Stage 2 — US-012 | Not opened | US-012 | Pipeline framework, context dataclass, ordered orchestrator, and Redis Pub/Sub progress publisher prepared on `feat/us-012-pipeline-infrastructure`. |
+| 2026-07-23 | Stage 2 — US-013 | Not opened | US-013 | PyMuPDF parser step extracts PDF pages to configurable-DPI PNG images and reports the 20% pipeline milestone on `feat/us-013-pdf-page-extraction`. |
 
 ---
 
@@ -249,14 +250,14 @@
   - [x] T-042 — Add progress publishing helper (Redis Pub/Sub)
 
 ### US-013 · As a backend dev, I want PyMuPDF-based PDF page extraction
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p2-pdf`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
-  - [ ] Step 1: extracts each page as a PNG at configurable DPI
-  - [ ] Returns list of page image paths in `PipelineContext.page_images`
-  - [ ] Reports `progress = 20%`
+  - [x] Step 1: extracts each page as a PNG at configurable DPI
+  - [x] Returns list of page image paths in `PipelineContext.page_images`
+  - [x] Reports `progress = 20%`
 - **Tasks:**
-  - [ ] T-043 — Add `pymupdf` to requirements
-  - [ ] T-044 — Implement `PdfParserStep` in `backend/app/pipeline/steps/pdf_parser.py`
+  - [x] T-043 — Add `pymupdf` to requirements
+  - [x] T-044 — Implement `PdfParserStep` in `backend/app/pipeline/steps/pdf_parser.py`
 
 ### US-014 · As a backend dev, I want an OpenCV preprocessing step
 - **Priority:** P1 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p2-pdf`
@@ -737,4 +738,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.3 — updated 2026-07-23 to reflect Phase 1 implementation and US-012 pipeline infrastructure progress. US-001 ✅ Done; US-002 → US-012 👀 In Review.*
+*Document version 0.4 — updated 2026-07-23 to reflect Phase 1 implementation, US-012 pipeline infrastructure, and US-013 PyMuPDF page extraction progress. US-001 ✅ Done; US-002 → US-013 👀 In Review.*
