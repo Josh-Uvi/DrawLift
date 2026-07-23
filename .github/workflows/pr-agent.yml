@@ -18,7 +18,7 @@ jobs:
         uses: the-pr-agent/pr-agent@main
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PROJECT_TOKEN }}
           # Enable/disable automatic tools
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
