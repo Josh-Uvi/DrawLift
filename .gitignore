@@ -157,6 +157,10 @@ models/
 backend/app/**/__pycache__/
 backend/app/**/*.pyc
 
+# Negate for frontend source code directory that matches lib/ pattern
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Logs
 logs/
 *.log
