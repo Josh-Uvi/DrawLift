@@ -1,14 +1,10 @@
 """Placeholder Celery task that simulates the conversion pipeline."""
 
-import json
 import time
+from typing import Any
 
-import redis
-
-from app.core.config import get_settings
+from app.pipeline.progress import get_progress_publisher
 from app.tasks.celery_app import celery_app
-
-settings = get_settings()
 
 
 def publish_progress(job_id: str, status: str, progress: int, step: str) -> None:
@@ -20,21 +16,16 @@ def publish_progress(job_id: str, status: str, progress: int, step: str) -> None
         progress: Progress percentage (0-100).
         step: The current pipeline step name.
     """
-    r = redis.from_url(settings.REDIS_URL)
-    channel = f"job:{job_id}"
-    payload = json.dumps(
-        {
-            "job_id": job_id,
-            "status": status,
-            "progress": progress,
-            "step": step,
-        }
+    get_progress_publisher().publish(
+        job_id=job_id,
+        status=status,
+        progress=progress,
+        step=step,
     )
-    r.publish(channel, payload)
 
 
 @celery_app.task(name="app.tasks.placeholder.process_job")
-def process_job(job_id: str, config: dict) -> str:
+def process_job(job_id: str, config: dict[str, Any]) -> str:
     """Simulate the conversion pipeline with progress updates.
 
     Args:
