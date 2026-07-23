@@ -8,6 +8,8 @@ python-multipart==0.0.*
 alembic==1.*
 redis==5.*
 pymupdf==1.*
+opencv-python-headless==4.*
+numpy==2.*
 ruff==0.8.*
 mypy==1.*
 pre-commit==4.*
