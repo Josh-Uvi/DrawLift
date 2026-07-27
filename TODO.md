@@ -40,7 +40,7 @@
 | 0 | **Bootstrap** | Repo, tooling, CI scaffold | 🚧 In Progress | 4 | 12 |
 | 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | 👀 In Review | 5 | 18 |
 | 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | 🚧 In Progress | 4 | 14 |
-| 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | 🚧 In Progress | 5 | 16 |
+| 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | 👀 In Review | 5 | 16 |
 | 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | ⬜ Backlog | 4 | 12 |
 | 5 | **Phase 5 — Polish & DWG** | Production-ready with DWG export | ⬜ Backlog | 6 | 20 |
 
@@ -59,6 +59,7 @@
 | 2026-07-23 | Stage 2 — US-014 | Not opened | US-014 | OpenCV preprocessing converts pages to grayscale binary arrays, applies blur and adaptive thresholding, corrects skew, and reports the 35% milestone on `feature/US-014-opencv-preprocessing`. |
 | 2026-07-27 | Stage 2 — US-015 | Not opened | US-015 | Page thumbnail preview: backend endpoint (`GET /jobs/{id}/pages/{n}`), PageViewer horizontal thumbnail strip, and click-to-enlarge modal on the job detail page on `feature/US-015-page-thumbnails`. |
 | 2026-07-27 | Stage 3 — Epic 3.1 | Not opened | US-016 → US-017 | Semantic segmentation step with CPU ONNX Runtime backend, cached model loading, persisted per-label masks, and Classic CV fallback selectable via job config on `feature/epic-3-1-semantic-segmentation`. |
+| 2026-07-27 | Stage 3 — Epic 3.2/3.3 | Not opened | US-018 → US-020 | Semantic masks now vectorize into CAD primitives, write readable layered DXF files with `ezdxf`, run through the real Celery pipeline, and expose completed-job DXF downloads on `feature/epic-3-vectorization-dxf`. |
 
 ---
 
@@ -323,40 +324,40 @@
 ## Epic 3.2 — Vectorization
 
 ### US-018 · As a backend dev, I want to convert masks into CAD primitives
-- **Priority:** P0 · **Effort:** L · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p3-vectorize`
+- **Priority:** P0 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
-  - [ ] Wall segments become `(start, end, thickness)` primitives
-  - [ ] Doors and windows become parametric blocks
-  - [ ] Polygon simplification reduces noise
-  - [ ] Reports `progress = 80%`
+  - [x] Wall segments become `(start, end, thickness)` primitives
+  - [x] Doors and windows become parametric blocks
+  - [x] Polygon simplification reduces noise
+  - [x] Reports `progress = 80%`
 - **Tasks:**
-  - [ ] T-059 — Define `Primitive` dataclasses in `backend/app/pipeline/primitives.py`
-  - [ ] T-060 — Implement `VectorizerStep` in `backend/app/pipeline/steps/vectorizer.py`
-  - [ ] T-061 — Implement wall thinning + Douglas-Peucker simplification
-  - [ ] T-062 — Unit test with synthetic mask input
+  - [x] T-059 — Define `Primitive` dataclasses in `backend/app/pipeline/primitives.py`
+  - [x] T-060 — Implement `VectorizerStep` in `backend/app/pipeline/steps/vectorizer.py`
+  - [x] T-061 — Implement wall thinning + Douglas-Peucker simplification
+  - [x] T-062 — Unit test with synthetic mask input
 
 ## Epic 3.3 — DXF Writer
 
 ### US-019 · As a backend dev, I want to write primitives to DXF using `ezdxf`
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p3-vectorize`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
-  - [ ] DXF file is generated and stored in output path
-  - [ ] Layers: `WALLS`, `DOORS`, `WINDOWS`, `ROOMS`, `TEXT`
-  - [ ] Output DXF opens in AutoCAD / LibreCAD without errors
-  - [ ] Reports `progress = 95%`
+  - [x] DXF file is generated and stored in output path
+  - [x] Layers: `WALLS`, `DOORS`, `WINDOWS`, `ROOMS`, `TEXT`
+  - [x] Output DXF opens in AutoCAD / LibreCAD without errors
+  - [x] Reports `progress = 95%`
 - **Tasks:**
-  - [ ] T-063 — Add `ezdxf` to requirements
-  - [ ] T-064 — Implement `DxfWriterStep` in `backend/app/pipeline/steps/dwg_writer.py`
-  - [ ] T-065 — Test DXF output with LibreCAD or `ezdxf` round-trip
+  - [x] T-063 — Add `ezdxf` to requirements
+  - [x] T-064 — Implement `DxfWriterStep` in `backend/app/pipeline/steps/dxf_writer.py`
+  - [x] T-065 — Test DXF output with `ezdxf` round-trip
 
 ### US-020 · As a user, I want to download the generated DXF file
-- **Priority:** P0 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p3-vectorize`
+- **Priority:** P0 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
-  - [ ] "Download" button appears when job status is `completed`
-  - [ ] `GET /api/v1/jobs/{id}/download` returns DXF with correct Content-Disposition
+  - [x] "Download" button appears when job status is `completed`
+  - [x] `GET /api/v1/jobs/{id}/download` returns DXF with correct Content-Disposition
 - **Tasks:**
-  - [ ] T-066 — Add `GET /api/v1/jobs/{id}/download` endpoint
-  - [ ] T-067 — Create `components/job/DownloadButton.tsx`
+  - [x] T-066 — Add `GET /api/v1/jobs/{id}/download` endpoint
+  - [x] T-067 — Create `components/job/DownloadButton.tsx`
 
 ---
 

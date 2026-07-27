@@ -6,6 +6,10 @@ import { SSEProgressEvent, JobStatus } from "@/types/api";
 
 interface ProgressTrackerProps {
   jobId: string;
+  initialProgress?: number;
+  initialStatus?: JobStatus;
+  initialStep?: string | null;
+  onComplete?: () => void;
 }
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -16,12 +20,22 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   failed: "bg-red-100 text-red-800",
 };
 
-export default function ProgressTracker({ jobId }: ProgressTrackerProps) {
-  const [progress, setProgress] = useState(0);
-  const [step, setStep] = useState("");
-  const [status, setStatus] = useState<JobStatus>("pending");
+export default function ProgressTracker({
+  jobId,
+  initialProgress = 0,
+  initialStatus = "pending",
+  initialStep = "",
+  onComplete,
+}: ProgressTrackerProps) {
+  const [progress, setProgress] = useState(initialProgress);
+  const [step, setStep] = useState(initialStep || "");
+  const [status, setStatus] = useState<JobStatus>(initialStatus);
 
   useEffect(() => {
+    if (initialStatus === "completed" || initialStatus === "failed") {
+      return;
+    }
+
     const eventSource = createSSEStream(
       jobId,
       (event: SSEProgressEvent) => {
@@ -32,11 +46,12 @@ export default function ProgressTracker({ jobId }: ProgressTrackerProps) {
       (error) => {
         console.error("SSE error:", error);
         setStatus("failed");
-      }
+      },
+      onComplete
     );
 
     return () => eventSource.close();
-  }, [jobId]);
+  }, [initialStatus, jobId, onComplete]);
 
   return (
     <div className="space-y-4">

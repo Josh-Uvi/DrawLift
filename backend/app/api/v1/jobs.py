@@ -1,14 +1,17 @@
 """Job API endpoints: POST /jobs, GET /jobs/{id}, GET /jobs."""
 
 import json
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.job import Job
 from app.schemas.job import JobConfig, JobCreateResponse, JobListResponse, JobStatus
@@ -16,6 +19,7 @@ from app.storage.local import get_storage
 from app.tasks.placeholder import process_job
 
 router = APIRouter()
+settings = get_settings()
 
 DEFAULT_CONFIG = (
     '{"mode": "2d", "dpi": 300, "floor_height_m": 3.0, '
@@ -111,6 +115,33 @@ async def get_job(
     return JobStatus.model_validate(job)
 
 
+@router.get("/jobs/{job_id}/download")
+async def download_job_output(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    """Download the generated DXF file for a completed job."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+    if job.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Job output is not ready for download",
+        )
+
+    download_path = _resolve_download_path(job)
+    return FileResponse(
+        path=str(download_path),
+        media_type="application/dxf",
+        filename=f"drawlift-{job.id}.dxf",
+    )
+
+
 @router.get("/jobs", response_model=JobListResponse)
 async def list_jobs(
     status_filter: str | None = None,
@@ -148,3 +179,31 @@ async def list_jobs(
         jobs=[JobStatus.model_validate(job) for job in jobs],
         total=total,
     )
+
+
+def _resolve_download_path(job: Job) -> Path:
+    """Resolve and validate a job output path before serving it to clients."""
+    if not job.output_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No output file is available for this job",
+        )
+
+    storage_base = Path(settings.STORAGE_PATH).resolve()
+    job_storage_dir = (storage_base / str(job.id)).resolve()
+    candidate = Path(job.output_file).resolve()
+    try:
+        job_storage_dir.relative_to(storage_base)
+        candidate.relative_to(job_storage_dir)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid output path",
+        ) from None
+
+    if candidate.suffix.lower() != ".dxf" or not candidate.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="DXF output file not found",
+        )
+    return candidate
