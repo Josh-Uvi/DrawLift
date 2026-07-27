@@ -1,5 +1,6 @@
 """Endpoint for serving extracted page images."""
 
+import re
 from pathlib import Path
 from uuid import UUID
 
@@ -14,6 +15,42 @@ from app.models.job import Job
 
 router = APIRouter()
 settings = get_settings()
+
+_PAGE_IMAGE_PATTERN = re.compile(r"^page_(\d{4})\.png$")
+
+
+def _ensure_child_path(path: Path, parent: Path, detail: str) -> None:
+    """Ensure a resolved path remains inside its expected resolved parent."""
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        ) from None
+
+
+def _find_page_image(job_pages_dir: Path, page_number: int) -> Path | None:
+    """Return a page image selected from trusted storage using an allowlisted name."""
+    if not job_pages_dir.is_dir():
+        return None
+
+    for candidate in job_pages_dir.iterdir():
+        match = _PAGE_IMAGE_PATTERN.fullmatch(candidate.name)
+        if match is None or int(match.group(1)) != page_number:
+            continue
+
+        resolved_candidate = candidate.resolve()
+        _ensure_child_path(
+            resolved_candidate,
+            job_pages_dir,
+            "Invalid page path",
+        )
+
+        if resolved_candidate.is_file():
+            return resolved_candidate
+
+    return None
 
 
 @router.get("/jobs/{job_id}/pages/{page_number}")
@@ -42,50 +79,35 @@ async def get_job_page(
             detail="Page number must be 1 or greater",
         )
 
-    job_id_str = str(job_id)
-    result = await db.execute(select(Job).where(Job.id == job_id_str))
+    result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id_str} not found",
+            detail=f"Job {job_id} not found",
         )
 
-    # Construct and validate the expected page image path from safe components.
+    if job.page_count is not None and page_number > job.page_count:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_number} not found for job {job_id}",
+        )
+
+    # Construct job storage paths only from configured storage and persisted job data.
     # PdfParserStep stores pages at: {storage_path}/{job_id}/pages/page_{n:04d}.png
     storage_base = Path(settings.STORAGE_PATH).resolve()
-    job_storage_dir = (storage_base / job_id_str).resolve()
+    persisted_job_dir_name = str(job.id)
+    job_storage_dir = (storage_base / persisted_job_dir_name).resolve()
 
-    try:
-        job_storage_dir.relative_to(storage_base)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid job path",
-        )
+    _ensure_child_path(job_storage_dir, storage_base, "Invalid job path")
 
     job_pages_dir = (job_storage_dir / "pages").resolve()
 
-    try:
-        job_pages_dir.relative_to(job_storage_dir)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid job path",
-        )
+    _ensure_child_path(job_pages_dir, job_storage_dir, "Invalid job path")
 
-    page_image = (job_pages_dir / f"page_{page_number:04d}.png").resolve()
-
-    try:
-        page_image.relative_to(job_pages_dir)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid page path",
-        )
-
-    if not page_image.exists():
+    page_image = _find_page_image(job_pages_dir, page_number)
+    if page_image is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Page {page_number} not found for job {job_id}",
@@ -94,5 +116,5 @@ async def get_job_page(
     return FileResponse(
         path=str(page_image),
         media_type="image/png",
-        filename=f"page_{page_number:04d}.png",
+        filename=page_image.name,
     )
