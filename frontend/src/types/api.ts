@@ -5,6 +5,7 @@ export interface JobConfig {
   dpi: number;
   floor_height_m: number;
   output_format: "dxf" | "dwg";
+  segmenter: "ml" | "classic";
 }
 
 export interface JobCreateResponse {
