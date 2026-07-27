@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) and Phase 2 (PDF parsing, preprocessing, page preview) are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow), Phase 2 (PDF parsing, preprocessing, page preview), and Epic 3.1 semantic segmentation are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -62,9 +62,9 @@ The pipeline runs inside the Celery worker and is composed of pluggable steps. E
 [2] Preprocessing     Grayscale → denoise → adaptive threshold → deskew (OpenCV)
        │
        ▼
-[3] Semantic          ML segmentation classifies pixels into:
-    Segmentation      Walls · Doors · Windows · Rooms · Dimensions · Text
-                      Options: YOLOv8-seg · U-Net · SAM (fine-tuned on floor plans)
+[3] Semantic          ML or Classic CV segmentation classifies pixels into:
+    Segmentation      Walls · Doors · Windows · Rooms · Text
+                      Options: ONNX Runtime CPU model · ClassicCV fallback
        │
        ▼
 [4] Vectorization     Contour detection → polygon simplification → classify as
@@ -237,7 +237,7 @@ ai-file-converter/
 │   │   │       └── jobs_stream.py # GET /jobs/{id}/stream (SSE)
 │   │   ├── core/                   # Config (pydantic-settings), database
 │   │   ├── models/                 # SQLAlchemy ORM (Job model)
-│   │   ├── pipeline/               # PipelineContext, PipelineStep, PDF parser, orchestrator, progress publisher
+│   │   ├── pipeline/               # PipelineContext, PipelineStep, parser, preprocessing, segmentation, progress
 │   │   ├── schemas/                # Pydantic request/response models
 │   │   ├── storage/                # Storage adapter (LocalStorage, ABC)
 │   │   └── tasks/                  # Celery app + placeholder pipeline
@@ -271,19 +271,14 @@ class PipelineStep(ABC):
     def execute(self, context: PipelineContext) -> PipelineContext: ...
 ```
 
-Concrete implementations: `PdfParserStep`, `OpenCVPreprocessor`, `YOLOSegmenter`, `ezdxfWriter`, etc. New approaches drop in without changing `Pipeline.run()`.
+Concrete implementations: `PdfParserStep`, `OpenCVPreprocessor`, `SegmenterStep`, future vectorizers/writers, etc. New approaches drop in without changing `Pipeline.run()`.
 
 Implemented foundation:
 - `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
 - `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
 - `backend/app/pipeline/steps/pdf_parser.py` implements PyMuPDF-backed PDF page extraction.
 - `backend/app/pipeline/steps/preprocessor.py` implements OpenCV grayscale, Gaussian blur, adaptive threshold, and deskew processing.
-- `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
-- `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
-
-Implemented foundation:
-- `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
-- `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
+- `backend/app/pipeline/steps/segmenter.py` implements ONNX Runtime semantic segmentation plus a Classic CV fallback.
 - `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
 - `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
@@ -323,7 +318,7 @@ The pipeline is a composed chain of steps. Each step is a pure function of the c
 result = Pipeline([
     PdfParserStep(),
     OpenCVPreprocessor(gaussian_kernel=(7, 7)),
-    YOLOSegmenter(model="floorplan-v1", device="cpu"),
+    SegmenterStep(),  # config: {"segmenter": "ml" | "classic"}
     ContourVectorizer(simplify_tolerance=2.0),
     WallExtruder(default_height_m=3.0),     # only in 3D mode
     EzDxfWriter(format="dxf"),
@@ -364,7 +359,8 @@ result = Pipeline([
 - [x] Page preview in frontend (horizontal thumbnail strip with click-to-enlarge modal)
 
 ### Phase 3 — 2D Vectorization (core value)
-- Integrate pre-trained floor plan segmentation model (e.g. fine-tuned on CubiCasa5K)
+- [x] Integrate semantic segmentation with CPU ONNX Runtime and Classic CV fallback
+- [x] Cache/download ONNX weights in the `models/` volume when configured
 - Vectorize detected walls/doors/windows to DXF
 - Downloadable DXF output
 
@@ -395,6 +391,7 @@ python-multipart==0.0.*  # file uploads
 alembic==1.*              # migrations
 redis==5.*               # Celery broker + Pub/Sub
 pymupdf==1.*             # PDF page rendering
+onnxruntime==1.*         # CPU ML segmentation inference
 sse-starlette==2.*       # SSE streaming
 ruff==0.8.*              # linting
 mypy==1.*                # type checking
@@ -410,7 +407,6 @@ numpy==2.*
 # Planned for Phase 3+ (not yet installed)
 # ezdxf                     # DXF generation (reliable, open)
 # libredwg (system-level)   # optional DWG support
-# onnxruntime               # production inference
 # torch + ultralytics       # training / fine-tuning
 ```
 
@@ -598,4 +594,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.6 — updated to reflect Phase 2 complete with page preview. Phase 1 and Phase 2 implementations are in review.*
+*Document version 0.7 — updated to reflect Epic 3.1 semantic segmentation. Phase 1, Phase 2, and Epic 3.1 implementations are in review.*
