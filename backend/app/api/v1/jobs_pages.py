@@ -52,10 +52,10 @@ async def get_job_page(
             detail=f"Job {job_id_str} not found",
         )
 
-    # Construct and validate the expected page image path
+    # Construct and validate the expected page image path from safe components.
     # PdfParserStep stores pages at: {storage_path}/{job_id}/pages/page_{n:04d}.png
     storage_base = Path(settings.STORAGE_PATH).resolve()
-    job_storage_dir = Path(job.storage_path).resolve()
+    job_storage_dir = (storage_base / job_id_str).resolve()
 
     try:
         job_storage_dir.relative_to(storage_base)
