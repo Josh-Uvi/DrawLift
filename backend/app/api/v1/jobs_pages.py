@@ -1,6 +1,7 @@
 """Endpoint for serving extracted page images."""
 
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -17,7 +18,7 @@ settings = get_settings()
 
 @router.get("/jobs/{job_id}/pages/{page_number}")
 async def get_job_page(
-    job_id: str,
+    job_id: UUID,
     page_number: int,
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
@@ -41,19 +42,29 @@ async def get_job_page(
             detail="Page number must be 1 or greater",
         )
 
-    result = await db.execute(select(Job).where(Job.id == job_id))
+    job_id_str = str(job_id)
+    result = await db.execute(select(Job).where(Job.id == job_id_str))
     job = result.scalar_one_or_none()
 
     if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} not found",
+            detail=f"Job {job_id_str} not found",
         )
 
     # Construct and validate the expected page image path
     # PdfParserStep stores pages at: {storage_path}/{job_id}/pages/page_{n:04d}.png
     storage_base = Path(settings.STORAGE_PATH).resolve()
-    job_pages_dir = (storage_base / job_id / "pages").resolve()
+    job_pages_dir = (storage_base / job_id_str / "pages").resolve()
+
+    try:
+        job_pages_dir.relative_to(storage_base)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid job path",
+        )
+
     page_image = (job_pages_dir / f"page_{page_number:04d}.png").resolve()
 
     try:
