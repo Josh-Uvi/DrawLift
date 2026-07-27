@@ -4,7 +4,9 @@ export interface JobConfig {
   mode: "2d" | "3d";
   dpi: number;
   floor_height_m: number;
-  output_format: "dxf" | "dwg";
+  slab_thickness_m?: number;
+  include_ceiling?: boolean;
+  output_format: "dxf" | "dwg" | "glb";
   segmenter: "ml" | "classic";
 }
 
