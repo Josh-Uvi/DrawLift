@@ -2,7 +2,7 @@ fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
   checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: .env.example
-  checksum: 300c0cac552c54660180ce29f391bc21617ac74830be6332684f5bef55de301c
+  checksum: 5d9b0a2ab0e22992f45af0f65b12c3774e1c033ae106de556969de655a905611
 - filename: backend/alembic/env.py
   checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
 - filename: backend/alembic.ini
@@ -12,7 +12,7 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: 420a5bb16709bc984a128ca142ede5b5f2a1ac311d2c465912ab6bf99a39b3b4
 - filename: TODO.md
-  checksum: 4509e98ac1e6a8fa42271539f033e19cfec37cd0b761664b7c6168b7e7cebd9e
+  checksum: d45391aee850493d1501f70909ab0469fc29f92de5f138ac28c6a93e66ab80a4
 - filename: frontend/src/components/job/PageViewer.tsx
   checksum: 161987d127228af51e82420c88594a54b972c9c7ae6814a36263804cfebc8a31
 - filename: frontend/src/components/job/ImageModal.tsx
