@@ -28,6 +28,10 @@ export async function uploadFile(
   return response.json();
 }
 
+export function getPageImageUrl(jobId: string, pageNumber: number): string {
+  return `${API_BASE}/api/v1/jobs/${jobId}/pages/${pageNumber}`;
+}
+
 export async function getJob(jobId: string): Promise<Job> {
   const response = await fetch(`${API_BASE}/api/v1/jobs/${jobId}`);
   if (!response.ok) {
