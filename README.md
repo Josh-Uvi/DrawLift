@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow), Phase 2 (PDF parsing, preprocessing, page preview), and Phase 3 2D vectorization/DXF export are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow), Phase 2 (PDF parsing, preprocessing, page preview), Phase 3 2D vectorization/DXF export, and Phase 4 3D extrusion (wall/slab solids, 3D DXF + GLB export, in-browser 3D preview) are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -72,14 +72,19 @@ The pipeline runs inside the Celery worker and is composed of pluggable steps. E
                       walls, doors, windows, rooms, text regions
        │
        ▼
-[5] 3D Extrusion      (if 3D mode) Extrude walls by floor height metadata
-   [optional]         or user-specified height. Add slabs and openings.
+[5] 3D Extrusion      (if 3D mode) Extrude walls into rectangular prisms by the
+   [optional]         configured floor height, add floor/ceiling slabs. Reports 85%.
        │
        ▼
-[6] DXF Writer        Write primitives to layered DXF with ezdxf
+[6] DXF Writer        Write primitives to layered DXF with ezdxf (2D layers plus
+                      3D `WALLS_3D` / `SLABS` 3DFACE geometry). Reports 95%.
        │
        ▼
-  Output File
+[7] GLB Writer        (if 3D mode) Export a self-contained GLB (binary glTF) mesh
+   [optional]         with trimesh for browser preview and download. Reports 97%.
+       │
+       ▼
+  Output File(s)
 ```
 
 ### Reference: Pipeline Context
@@ -147,7 +152,7 @@ frontend/src/
 | `GET` | `/api/v1/jobs/{id}` | Get job status, progress (0–100), current step |
 | `GET` | `/api/v1/jobs/{id}/stream` | **SSE** — real-time progress updates |
 | `GET` | `/api/v1/jobs/{id}/pages/{n}` | Extracted page image (for preview) |
-| `GET` | `/api/v1/jobs/{id}/download` | Download generated DXF with attachment Content-Disposition |
+| `GET` | `/api/v1/jobs/{id}/download` | Download generated DXF (default) or GLB via `?format=dxf\|glb` with attachment Content-Disposition |
 | `GET` | `/api/v1/jobs` | List all jobs (paginated, filterable by status) |
 | `DELETE` | `/api/v1/jobs/{id}` | Delete job + associated files |
 | `GET` | `/api/v1/health` | Health check (liveness/readiness) |
@@ -282,7 +287,9 @@ Implemented foundation:
 - `backend/app/pipeline/steps/segmenter.py` implements ONNX Runtime semantic segmentation plus a Classic CV fallback.
 - `backend/app/pipeline/primitives.py` defines typed CAD primitives (`WallPrimitive`, `OpeningPrimitive`, `RoomPrimitive`, `TextPrimitive`).
 - `backend/app/pipeline/steps/vectorizer.py` converts masks into simplified CAD primitives and reports the 80% milestone.
-- `backend/app/pipeline/steps/dxf_writer.py` writes `WALLS`, `DOORS`, `WINDOWS`, `ROOMS`, and `TEXT` layers to DXF and reports the 95% milestone.
+- `backend/app/pipeline/steps/dxf_writer.py` writes `WALLS`, `DOORS`, `WINDOWS`, `ROOMS`, and `TEXT` layers to DXF (plus `WALLS_3D` / `SLABS` 3DFACE geometry for 3D jobs) and reports the 95% milestone.
+- `backend/app/pipeline/steps/extruder.py` (`WallExtruderStep`) extrudes walls into 3D prisms and adds floor/ceiling slabs, reporting the 85% milestone.
+- `backend/app/pipeline/steps/glb_writer.py` (`GlbWriterStep`) exports a self-contained GLB (binary glTF) via `trimesh` for 3D jobs.
 - `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
 - `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
@@ -370,9 +377,12 @@ result = Pipeline([
 - [x] Downloadable DXF output appears when jobs complete
 
 ### Phase 4 — 3D Extrusion
-- Extrude walls by configurable height
-- Add floor slabs and door/window openings
-- Export as 3D DXF (and optionally IFC)
+- [x] Extrude walls into rectangular prisms by configurable floor height (default 3.0m)
+- [x] Add floor slabs (and optional ceiling slab) from detected room polygons
+- [x] Export 3D DXF (`3DFACE` / `POLYLINE 3D` on `WALLS_3D` / `SLABS` layers)
+- [x] Export a self-contained GLB (binary glTF) via `trimesh`
+- [x] In-browser 3D preview (`three` / `@react-three/fiber`) with orbit controls and wireframe/solid toggle
+- [x] `?format=glb` download endpoint for the 3D model
 
 ### Phase 5 — Polish & DWG Export
 - DWG conversion via `libredwg` or ODA `FileConverter`
@@ -398,6 +408,9 @@ redis==5.*               # Celery broker + Pub/Sub
 pymupdf==1.*             # PDF page rendering
 onnxruntime==1.*         # CPU ML segmentation inference
 ezdxf==1.*              # DXF generation and validation
+trimesh==4.*            # 3D mesh construction + GLB (binary glTF) export
+shapely==2.*            # polygon geometry for slab/wall extrusion
+manifold3d==3.*         # robust mesh boolean/extrusion backend for trimesh
 sse-starlette==2.*       # SSE streaming
 ruff==0.8.*              # linting
 mypy==1.*                # type checking
@@ -425,7 +438,10 @@ numpy==2.*
     "tailwindcss": "^3.4.0",
     "react-dropzone": "^14.2.0",
     "sonner": "^1.4.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "three": "^0.169.0",
+    "@react-three/fiber": "^8.17.0",
+    "@react-three/drei": "^9.114.0"
   }
 }
 ```
@@ -599,4 +615,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.8 — updated to reflect Epic 3.2/3.3 vectorization, DXF generation, and completed-job downloads. Phase 1, Phase 2, and Phase 3 implementations are in review.*
+*Document version 0.9 — updated to reflect Phase 4 3D extrusion: wall/slab solids, 3D DXF + GLB export, `?format=glb` download, and the in-browser Three.js 3D preview. Phases 1–4 implementations are in review.*
