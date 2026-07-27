@@ -1,4 +1,4 @@
-export type JobStatus = "pending" | "queued" | "processing" | "completed" | "failed";
+export type JobStatus = "pending" | "queued" | "processing" | "completed" | "failed" | "archived";
 
 export interface JobConfig {
   mode: "2d" | "3d";
@@ -6,7 +6,7 @@ export interface JobConfig {
   floor_height_m: number;
   slab_thickness_m?: number;
   include_ceiling?: boolean;
-  output_format: "dxf" | "dwg" | "glb";
+  output_format: "dxf" | "dwg" | "both";
   segmenter: "ml" | "classic";
 }
 
@@ -24,6 +24,7 @@ export interface Job {
   output_file: string | null;
   page_count: number | null;
   error_msg: string | null;
+  error_trace: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,4 +39,5 @@ export interface SSEProgressEvent {
   status: JobStatus;
   progress: number;
   step: string;
+  message?: string | null;
 }

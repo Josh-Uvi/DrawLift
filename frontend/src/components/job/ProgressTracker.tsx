@@ -18,6 +18,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   processing: "bg-purple-100 text-purple-800",
   completed: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
+  archived: "bg-gray-200 text-gray-800",
 };
 
 export default function ProgressTracker({
@@ -30,9 +31,14 @@ export default function ProgressTracker({
   const [progress, setProgress] = useState(initialProgress);
   const [step, setStep] = useState(initialStep || "");
   const [status, setStatus] = useState<JobStatus>(initialStatus);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (initialStatus === "completed" || initialStatus === "failed") {
+    if (
+      initialStatus === "completed" ||
+      initialStatus === "failed" ||
+      initialStatus === "archived"
+    ) {
       return;
     }
 
@@ -42,6 +48,7 @@ export default function ProgressTracker({
         setProgress(event.progress);
         setStep(event.step);
         setStatus(event.status);
+        setMessage(event.message ?? null);
       },
       (error) => {
         console.error("SSE error:", error);
@@ -72,6 +79,11 @@ export default function ProgressTracker({
       {step && (
         <p className="text-center text-sm text-gray-600">
           Current step: <span className="font-medium">{step}</span>
+        </p>
+      )}
+      {(message || status === "failed") && (
+        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {message || "The conversion failed. Review the job details and try again."}
         </p>
       )}
     </div>

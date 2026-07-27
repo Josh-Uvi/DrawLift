@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import DropZone from "@/components/upload/DropZone";
 import ConversionOptions from "@/components/upload/ConversionOptions";
@@ -52,6 +53,9 @@ export default function HomePage() {
         <p className="mt-2 text-lg text-gray-600">
           Convert architecture PDFs to DWG/DXF CAD models
         </p>
+        <Link href="/history" className="mt-3 inline-block text-sm text-primary hover:underline">
+          View conversion history
+        </Link>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

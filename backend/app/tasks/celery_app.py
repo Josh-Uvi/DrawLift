@@ -22,6 +22,12 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     result_expires=3600,
+    beat_schedule={
+        "cleanup-expired-jobs-daily": {
+            "task": "app.tasks.cleanup.cleanup_expired_jobs",
+            "schedule": 60 * 60 * 24,
+        },
+    },
 )
 
 celery_app.autodiscover_tasks(["app.tasks"])

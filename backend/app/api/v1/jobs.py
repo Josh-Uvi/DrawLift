@@ -5,7 +5,17 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy import func, select
@@ -117,6 +127,7 @@ async def get_job(
 
 DOWNLOAD_FORMATS: dict[str, dict[str, str]] = {
     "dxf": {"suffix": ".dxf", "filename": "output.dxf", "media_type": "application/dxf"},
+    "dwg": {"suffix": ".dwg", "filename": "output.dwg", "media_type": "application/acad"},
     "glb": {"suffix": ".glb", "filename": "output.glb", "media_type": "model/gltf-binary"},
 }
 
@@ -124,10 +135,10 @@ DOWNLOAD_FORMATS: dict[str, dict[str, str]] = {
 @router.get("/jobs/{job_id}/download")
 async def download_job_output(
     job_id: UUID,
-    format: Annotated[Literal["dxf", "glb"], Query()] = "dxf",
+    format: Annotated[Literal["dxf", "dwg", "glb"], Query()] = "dxf",
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
-    """Download the generated DXF (default) or GLB file for a completed job."""
+    """Download the generated DXF (default), DWG, or GLB file for a completed job."""
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -151,15 +162,19 @@ async def download_job_output(
 
 @router.get("/jobs", response_model=JobListResponse)
 async def list_jobs(
-    status_filter: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    status: Annotated[str | None, Query()] = None,
+    status_filter: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     db: AsyncSession = Depends(get_db),
 ) -> JobListResponse:
     """List all jobs with optional status filter.
 
     Args:
-        status_filter: Optional status to filter by.
+        status: Optional status to filter by.
+        status_filter: Backward-compatible alias for status.
+        page: One-based page number used when offset is not provided.
         limit: Maximum number of results.
         offset: Pagination offset.
         db: Database session.
@@ -170,11 +185,13 @@ async def list_jobs(
     query = select(Job)
     count_query = select(func.count()).select_from(Job)
 
-    if status_filter:
-        query = query.where(Job.status == status_filter)
-        count_query = count_query.where(Job.status == status_filter)
+    resolved_status = status or status_filter
+    if resolved_status:
+        query = query.where(Job.status == resolved_status)
+        count_query = count_query.where(Job.status == resolved_status)
 
-    query = query.order_by(Job.created_at.desc()).limit(limit).offset(offset)
+    resolved_offset = offset if offset > 0 else (page - 1) * limit
+    query = query.order_by(Job.created_at.desc()).limit(limit).offset(resolved_offset)
 
     result = await db.execute(query)
     jobs = result.scalars().all()
@@ -186,6 +203,56 @@ async def list_jobs(
         jobs=[JobStatus.model_validate(job) for job in jobs],
         total=total,
     )
+
+
+@router.post("/jobs/{job_id}/retry", response_model=JobCreateResponse)
+async def retry_job(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> JobCreateResponse:
+    """Re-enqueue a failed job with its original input file and configuration."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+    if job.status != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed jobs can be retried",
+        )
+
+    job.status = "pending"
+    job.progress = 0
+    job.step = "Retry queued"
+    job.error_msg = None
+    job.error_trace = None
+    job.output_file = None
+    await db.flush()
+
+    process_job.delay(str(job.id), dict(job.config))
+    return JobCreateResponse(job_id=str(job.id))
+
+
+@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_job(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Delete a job row and its associated local storage directory."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+
+    await get_storage().delete(str(job.id))
+    await db.delete(job)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _resolve_download_path(job: Job, *, download_format: str = "dxf") -> Path:

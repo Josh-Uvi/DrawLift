@@ -17,6 +17,7 @@ def create_job(
     *,
     status: str = "completed",
     with_glb: bool = False,
+    with_dwg: bool = False,
 ) -> Job:
     """Create an in-memory job model with a valid output file."""
     job_id = uuid.uuid4()
@@ -25,6 +26,8 @@ def create_job(
     output_path.write_text("0\nSECTION\n2\nEOF\n", encoding="utf-8")
     if with_glb:
         (output_path.parent / "output.glb").write_bytes(b"glTF\x02\x00\x00\x00")
+    if with_dwg:
+        (output_path.parent / "output.dwg").write_bytes(b"AC1027\x00DWG")
     return Job(
         id=job_id,
         status=status,
@@ -161,3 +164,45 @@ async def test_download_endpoint_returns_glb_content_disposition(
     assert response.media_type == "model/gltf-binary"
     assert response.filename == f"drawlift-{job.id}.glb"
     assert f"drawlift-{job.id}.glb" in response.headers["content-disposition"]
+
+
+def test_resolve_download_path_serves_dwg_alongside_dxf(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The DWG output is served from the same trusted job output directory."""
+    monkeypatch.setattr("app.api.v1.jobs.settings.STORAGE_PATH", str(tmp_path))
+    job = create_job(tmp_path, with_dwg=True)
+
+    resolved = _resolve_download_path(job, download_format="dwg")
+
+    assert resolved.suffix == ".dwg"
+    assert resolved.is_file()
+
+
+@pytest.mark.asyncio
+async def test_download_endpoint_returns_dwg_content_disposition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The download endpoint serves DWG with a CAD attachment filename."""
+    monkeypatch.setattr("app.api.v1.jobs.settings.STORAGE_PATH", str(tmp_path))
+    job = create_job(tmp_path, with_dwg=True)
+
+    class StubResult:
+        def scalar_one_or_none(self) -> Job:
+            return job
+
+    class StubSession:
+        async def execute(self, _statement: object) -> StubResult:
+            return StubResult()
+
+    response = await download_job_output(
+        job.id,
+        format="dwg",
+        db=StubSession(),  # type: ignore[arg-type]
+    )
+
+    assert response.media_type == "application/acad"
+    assert response.filename == f"drawlift-{job.id}.dwg"
+    assert f"drawlift-{job.id}.dwg" in response.headers["content-disposition"]

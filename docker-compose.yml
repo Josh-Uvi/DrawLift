@@ -35,7 +35,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://aifc:aifc@postgres:5432/aifc
       REDIS_URL: redis://redis:6379/0
       STORAGE_PATH: /app/storage
+      STORAGE_TTL_DAYS: 7
       MODELS_PATH: /app/models
+      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
       CORS_ORIGINS: '["http://localhost:3000"]'
       DEBUG: "true"
     volumes:
@@ -55,7 +57,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://aifc:aifc@postgres:5432/aifc
       REDIS_URL: redis://redis:6379/0
       STORAGE_PATH: /app/storage
+      STORAGE_TTL_DAYS: 7
       MODELS_PATH: /app/models
+      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
     volumes:
       - ./backend:/app
       - storage_data:/app/storage
@@ -66,6 +70,34 @@ services:
       redis:
         condition: service_healthy
     command: celery -A app.tasks.celery_app worker --loglevel=info
+
+  beat:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aifc:aifc@postgres:5432/aifc
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_PATH: /app/storage
+      STORAGE_TTL_DAYS: 7
+      MODELS_PATH: /app/models
+      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
+    volumes:
+      - ./backend:/app
+      - storage_data:/app/storage
+      - models_data:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+
+  dwg-converter:
+    image: alpine:3.20
+    profiles:
+      - dwg
+    volumes:
+      - storage_data:/app/storage
+    command: sh -c "echo 'Mount ODA FileConverter or libredwg here for DWG_CONVERTER_COMMAND' && tail -f /dev/null"
 
   frontend:
     build: ./frontend

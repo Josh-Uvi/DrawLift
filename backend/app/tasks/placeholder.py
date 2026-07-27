@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import traceback
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -12,6 +13,7 @@ from sqlalchemy import select
 from app.core.database import async_session
 from app.models.job import Job
 from app.pipeline import (
+    DwgConverterStep,
     DxfWriterStep,
     GlbWriterStep,
     OpenCVPreprocessor,
@@ -44,8 +46,15 @@ def publish_progress(job_id: str, status: str, progress: int, step: str) -> None
     )
 
 
-@celery_app.task(name="app.tasks.placeholder.process_job")
-def process_job(job_id: str, config: dict[str, Any]) -> str:
+@celery_app.task(
+    bind=True,
+    name="app.tasks.placeholder.process_job",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
+def process_job(_self: object, job_id: str, config: dict[str, Any]) -> str:
     """Run the real conversion pipeline and persist job progress.
 
     Args:
@@ -70,6 +79,7 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
         job.progress = 0
         job.step = "Starting"
         job.error_msg = None
+        job.error_trace = None
         await session.commit()
 
         if not job.input_file:
@@ -95,6 +105,8 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
         steps.append(DxfWriterStep(output_path=job_dir / "output" / "output.dxf"))
         if config.get("mode") == "3d":
             steps.append(GlbWriterStep(output_path=job_dir / "output" / "output.glb"))
+        if config.get("output_format") in {"dwg", "both"}:
+            steps.append(DwgConverterStep(output_path=job_dir / "output" / "output.dwg"))
 
         pipeline = Pipeline.from_steps(*steps, publish_step_progress=False)
 
@@ -104,6 +116,7 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
             job.status = "failed"
             job.step = "Failed"
             job.error_msg = str(exc)
+            job.error_trace = traceback.format_exc()
             await session.commit()
             get_progress_publisher().publish(
                 job_id=job_id,

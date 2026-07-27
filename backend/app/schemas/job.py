@@ -15,7 +15,7 @@ class JobConfig(BaseModel):
     floor_height_m: float = Field(default=3.0, ge=0.5, le=10.0)
     slab_thickness_m: float = Field(default=0.2, ge=0.05, le=2.0)
     include_ceiling: bool = False
-    output_format: Literal["dxf", "dwg", "glb"] = "dxf"
+    output_format: Literal["dxf", "dwg", "both"] = "dxf"
     segmenter: Literal["ml", "classic"] = "classic"
 
 
@@ -29,7 +29,7 @@ class JobStatus(BaseModel):
     """Full job status representation."""
 
     id: UUID
-    status: Literal["pending", "queued", "processing", "completed", "failed"]
+    status: Literal["pending", "queued", "processing", "completed", "failed", "archived"]
     progress: int
     step: str | None = None
     config: dict[str, Any]
@@ -37,6 +37,7 @@ class JobStatus(BaseModel):
     output_file: str | None = None
     page_count: int | None = None
     error_msg: str | None = None
+    error_trace: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -54,6 +55,7 @@ class SSEProgressEvent(BaseModel):
     """SSE event payload for progress updates."""
 
     job_id: str
-    status: Literal["pending", "queued", "processing", "completed", "failed"]
+    status: Literal["pending", "queued", "processing", "completed", "failed", "archived"]
     progress: int
     step: str
+    message: str | None = None

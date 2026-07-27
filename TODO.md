@@ -1,4 +1,5 @@
 # TODO — AI File Converter Implementation Tracker
+
 [![CI](https://github.com/Josh-Uvi/DrawLift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Josh-Uvi/DrawLift/actions/workflows/ci.yml)
 
 > Living document that decomposes the [README.md](./README.md) architecture into actionable work.
@@ -9,14 +10,16 @@
 ## Conventions
 
 ### Priority Levels
-| Code | Meaning | Use when |
-|---|---|---|
-| **P0** | Critical / Blocker | Cannot ship without it |
-| **P1** | High | Core MVP functionality |
-| **P2** | Medium | Required for polished MVP |
-| **P3** | Low | Nice-to-have / future |
+
+| Code   | Meaning            | Use when                  |
+| ------ | ------------------ | ------------------------- |
+| **P0** | Critical / Blocker | Cannot ship without it    |
+| **P1** | High               | Core MVP functionality    |
+| **P2** | Medium             | Required for polished MVP |
+| **P3** | Low                | Nice-to-have / future     |
 
 ### Effort Estimation (T-Shirt Sizes)
+
 - **XS** — < 1 hour
 - **S** — 1–4 hours
 - **M** — 0.5–1 day
@@ -24,9 +27,11 @@
 - **XL** — 3+ days (should be split)
 
 ### Status
+
 `⬜ Backlog` · `🟦 Todo` · `🚧 In Progress` · `👀 In Review` · `✅ Done` · `❌ Blocked` · `⛔ Canceled`
 
 ### Labels
+
 `area:frontend` · `area:backend` · `area:devops` · `area:ml` · `area:docs`
 `type:bug` · `type:chore` · `type:spike` · `type:feature`
 `epic:p1-scaffold` · `epic:p2-pdf` · `epic:p3-vectorize` · `epic:p4-3d` · `epic:p5-polish`
@@ -35,32 +40,33 @@
 
 ## Stage Overview
 
-| # | Stage | Goal | Status | Stories | Tasks |
-|---|---|---|---|---|---|
-| 0 | **Bootstrap** | Repo, tooling, CI scaffold | 🚧 In Progress | 4 | 12 |
-| 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | 👀 In Review | 5 | 18 |
-| 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | 🚧 In Progress | 4 | 14 |
-| 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | 👀 In Review | 5 | 16 |
-| 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | 👀 In Review | 4 | 12 |
-| 5 | **Phase 5 — Polish & DWG** | Production-ready with DWG export | ⬜ Backlog | 6 | 20 |
+| #   | Stage                          | Goal                             | Status         | Stories | Tasks |
+| --- | ------------------------------ | -------------------------------- | -------------- | ------- | ----- |
+| 0   | **Bootstrap**                  | Repo, tooling, CI scaffold       | 🚧 In Progress | 4       | 12    |
+| 1   | **Phase 1 — MVP Skeleton**     | Upload + queue + job tracking    | 👀 In Review   | 7       | 26    |
+| 2   | **Phase 2 — PDF Parsing**      | Extract & preview page images    | 🚧 In Progress | 4       | 13    |
+| 3   | **Phase 3 — 2D Vectorization** | PDF → DXF (core value)           | 👀 In Review   | 5       | 16    |
+| 4   | **Phase 4 — 3D Extrusion**     | Walls → 3D model                 | 👀 In Review   | 4       | 13    |
+| 5   | **Phase 5 — Polish & DWG**     | Production-ready with DWG export | 👀 In Review   | 4       | 14    |
 
-**Total: 28 user stories · 92 actionable tasks**
+**Total: 28 user stories · 94 actionable tasks**
 
 ---
 
 ## Progress Log
 
-| Date | Milestone | PR | Stories completed | Notes |
-|---|---|---|---|---|
-| 2025-07-22 | Stage 0 — US-001 | [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged) | US-001 | Monorepo layout, `.gitignore`, `LICENSE`, `README.md` |
-| 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open) | US-002 → US-011 | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming, and pre-commit quality gates. |
-| 2026-07-23 | Stage 2 — US-012 | Not opened | US-012 | Pipeline framework, context dataclass, ordered orchestrator, and Redis Pub/Sub progress publisher prepared on `feat/us-012-pipeline-infrastructure`. |
-| 2026-07-23 | Stage 2 — US-013 | Not opened | US-013 | PyMuPDF parser step extracts PDF pages to configurable-DPI PNG images and reports the 20% pipeline milestone on `feat/us-013-pdf-page-extraction`. |
-| 2026-07-23 | Stage 2 — US-014 | Not opened | US-014 | OpenCV preprocessing converts pages to grayscale binary arrays, applies blur and adaptive thresholding, corrects skew, and reports the 35% milestone on `feature/US-014-opencv-preprocessing`. |
-| 2026-07-27 | Stage 2 — US-015 | Not opened | US-015 | Page thumbnail preview: backend endpoint (`GET /jobs/{id}/pages/{n}`), PageViewer horizontal thumbnail strip, and click-to-enlarge modal on the job detail page on `feature/US-015-page-thumbnails`. |
-| 2026-07-27 | Stage 3 — Epic 3.1 | Not opened | US-016 → US-017 | Semantic segmentation step with CPU ONNX Runtime backend, cached model loading, persisted per-label masks, and Classic CV fallback selectable via job config on `feature/epic-3-1-semantic-segmentation`. |
-| 2026-07-27 | Stage 3 — Epic 3.2/3.3 | Not opened | US-018 → US-020 | Semantic masks now vectorize into CAD primitives, write readable layered DXF files with `ezdxf`, run through the real Celery pipeline, and expose completed-job DXF downloads on `feature/epic-3-vectorization-dxf`. |
-| 2026-07-27 | Stage 4 — Epic 4.1/4.2 | Not opened | US-021 → US-024 | 3D extrusion lifts walls into rectangular prisms with floor/ceiling slabs, writes 3D DXF (`3DFACE`/`POLYLINE 3D`) plus a self-contained GLB via `trimesh`, adds a `three`/`@react-three/fiber` browser preview with orbit controls and wireframe/solid toggle, and serves `?format=glb` downloads on `feature/stage-4-3d-extrusion`. |
+| Date       | Milestone                   | PR                                                           | Stories completed | Notes                                                                                                                                                                                                                                                                                                                                                               |
+| ---------- | --------------------------- | ------------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2025-07-22 | Stage 0 — US-001            | [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged) | US-001            | Monorepo layout, `.gitignore`, `LICENSE`, `README.md`                                                                                                                                                                                                                                                                                                               |
+| 2025-07-23 | Stage 0 + Stage 1 — Phase 1 | [#31](https://github.com/Josh-Uvi/DrawLift/pull/31) (open)   | US-002 → US-011   | Full Phase 1 implementation: FastAPI backend, Next.js 14 frontend, Docker Compose, CI, Celery, SSE streaming, and pre-commit quality gates.                                                                                                                                                                                                                         |
+| 2026-07-23 | Stage 2 — US-012            | Not opened                                                   | US-012            | Pipeline framework, context dataclass, ordered orchestrator, and Redis Pub/Sub progress publisher prepared on `feat/us-012-pipeline-infrastructure`.                                                                                                                                                                                                                |
+| 2026-07-23 | Stage 2 — US-013            | Not opened                                                   | US-013            | PyMuPDF parser step extracts PDF pages to configurable-DPI PNG images and reports the 20% pipeline milestone on `feat/us-013-pdf-page-extraction`.                                                                                                                                                                                                                  |
+| 2026-07-23 | Stage 2 — US-014            | Not opened                                                   | US-014            | OpenCV preprocessing converts pages to grayscale binary arrays, applies blur and adaptive thresholding, corrects skew, and reports the 35% milestone on `feature/US-014-opencv-preprocessing`.                                                                                                                                                                      |
+| 2026-07-27 | Stage 2 — US-015            | Not opened                                                   | US-015            | Page thumbnail preview: backend endpoint (`GET /jobs/{id}/pages/{n}`), PageViewer horizontal thumbnail strip, and click-to-enlarge modal on the job detail page on `feature/US-015-page-thumbnails`.                                                                                                                                                                |
+| 2026-07-27 | Stage 3 — Epic 3.1          | Not opened                                                   | US-016 → US-017   | Semantic segmentation step with CPU ONNX Runtime backend, cached model loading, persisted per-label masks, and Classic CV fallback selectable via job config on `feature/epic-3-1-semantic-segmentation`.                                                                                                                                                           |
+| 2026-07-27 | Stage 3 — Epic 3.2/3.3      | Not opened                                                   | US-018 → US-020   | Semantic masks now vectorize into CAD primitives, write readable layered DXF files with `ezdxf`, run through the real Celery pipeline, and expose completed-job DXF downloads on `feature/epic-3-vectorization-dxf`.                                                                                                                                                |
+| 2026-07-27 | Stage 4 — Epic 4.1/4.2      | Not opened                                                   | US-021 → US-024   | 3D extrusion lifts walls into rectangular prisms with floor/ceiling slabs, writes 3D DXF (`3DFACE`/`POLYLINE 3D`) plus a self-contained GLB via `trimesh`, adds a `three`/`@react-three/fiber` browser preview with orbit controls and wireframe/solid toggle, and serves `?format=glb` downloads on `feature/stage-4-3d-extrusion`.                                |
+| 2026-07-27 | Stage 5 — Epic 5.1/5.4      | Not opened                                                   | US-025 → US-028   | Production polish adds operator-configurable DWG conversion through libredwg/ODA command integration, DXF/DWG/both output selection, history/job management UI, retryable failed jobs with stored stack traces, global API error handling, daily Celery Beat cleanup, archived jobs, and an optional DWG converter compose profile on `feature/stage-5-polish-dwg`. |
 
 ---
 
@@ -71,6 +77,7 @@
 ## Epic 0.1 — Repository Structure
 
 ### US-001 · As a developer, I want a monorepo layout with `frontend/` and `backend/` folders
+
 - **Priority:** P0 · **Effort:** S · **Status:** ✅ Done · **Labels:** `area:devops`, `type:chore`
 - **PR:** [#30](https://github.com/Josh-Uvi/DrawLift/pull/30) (merged to `main` at `5ae452a`)
 - **Acceptance Criteria:**
@@ -87,6 +94,7 @@
 ## Epic 0.2 — Docker Compose Foundations
 
 ### US-002 · As a developer, I want `docker compose up` to start all services
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:feature`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -104,6 +112,7 @@
 ## Epic 0.3 — Code Quality Tooling
 
 ### US-003 · As a developer, I want linting and formatting pre-configured
+
 - **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:chore`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -116,6 +125,7 @@
   - [x] T-011a — Configure root `.pre-commit-config.yaml` to run backend and frontend checks
 
 ### US-004 · As a developer, I want a basic CI pipeline on GitHub Actions
+
 - **Priority:** P2 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:feature`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -134,6 +144,7 @@
 ## Epic 1.1 — Backend Foundation
 
 ### US-005 · As a backend dev, I want a FastAPI skeleton with health checks and config
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -148,6 +159,7 @@
   - [x] T-016 — Create `backend/app/api/v1/health.py`
 
 ### US-006 · As a backend dev, I want PostgreSQL connected via SQLAlchemy (async)
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -161,6 +173,7 @@
   - [x] T-020 — Create `JobRepository` with CRUD methods
 
 ### US-007 · As a backend dev, I want Celery wired to Redis
+
 - **Priority:** P0 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -174,6 +187,7 @@
 ## Epic 1.2 — File Upload API
 
 ### US-008 · As a user, I want to upload a PDF and receive a `job_id`
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -193,6 +207,7 @@
 ## Epic 1.3 — Frontend Foundation
 
 ### US-009 · As a user, I want a clean landing page with a file drop zone
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -209,6 +224,7 @@
   - [x] T-032 — Create `app/page.tsx` landing page
 
 ### US-010 · As a user, I want to see conversion options before submitting
+
 - **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -221,6 +237,7 @@
   - [x] T-034 — Wire options to dropzone state via React Hook Form or local state
 
 ### US-011 · As a user, I want to see live progress after submitting
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p1-scaffold`
 - **PR:** [#31](https://github.com/Josh-Uvi/DrawLift/pull/31)
 - **Acceptance Criteria:**
@@ -242,6 +259,7 @@
 ## Epic 2.1 — Pipeline Infrastructure
 
 ### US-012 · As a backend dev, I want a pluggable pipeline framework
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
   - [x] `PipelineStep` ABC defined
@@ -255,6 +273,7 @@
   - [x] T-042 — Add progress publishing helper (Redis Pub/Sub)
 
 ### US-013 · As a backend dev, I want PyMuPDF-based PDF page extraction
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
   - [x] Step 1: extracts each page as a PNG at configurable DPI
@@ -265,6 +284,7 @@
   - [x] T-044 — Implement `PdfParserStep` in `backend/app/pipeline/steps/pdf_parser.py`
 
 ### US-014 · As a backend dev, I want an OpenCV preprocessing step
+
 - **Priority:** P1 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
   - [x] Converts to grayscale
@@ -279,6 +299,7 @@
 ## Epic 2.2 — Frontend Preview
 
 ### US-015 · As a user, I want to see extracted page thumbnails on the job page
+
 - **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
   - [x] `/jobs/{id}/pages/{n}` endpoint serves extracted page images
@@ -299,6 +320,7 @@
 ## Epic 3.1 — Semantic Segmentation
 
 ### US-016 · As a backend dev, I want to integrate an ML segmentation model
+
 - **Priority:** P0 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:ml`, `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
   - [x] Model loads once at worker startup (not per request)
@@ -313,6 +335,7 @@
   - [x] T-056 — Unit test inference on sample input
 
 ### US-017 · As a backend dev, I want a non-ML fallback for simple line drawings
+
 - **Priority:** P2 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
   - [x] `ClassicCVSegmenter` using threshold + Hough line detection
@@ -325,6 +348,7 @@
 ## Epic 3.2 — Vectorization
 
 ### US-018 · As a backend dev, I want to convert masks into CAD primitives
+
 - **Priority:** P0 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
   - [x] Wall segments become `(start, end, thickness)` primitives
@@ -340,6 +364,7 @@
 ## Epic 3.3 — DXF Writer
 
 ### US-019 · As a backend dev, I want to write primitives to DXF using `ezdxf`
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
   - [x] DXF file is generated and stored in output path
@@ -352,6 +377,7 @@
   - [x] T-065 — Test DXF output with `ezdxf` round-trip
 
 ### US-020 · As a user, I want to download the generated DXF file
+
 - **Priority:** P0 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
   - [x] "Download" button appears when job status is `completed`
@@ -369,6 +395,7 @@
 ## Epic 4.1 — Wall Extrusion
 
 ### US-021 · As a backend dev, I want to extrude wall segments into 3D volumes
+
 - **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p4-3d`
 - **Acceptance Criteria:**
   - [x] Each wall becomes a rectangular prism with floor-height as Z-dimension
@@ -381,6 +408,7 @@
   - [x] T-070 — Add 3D primitives to DXF writer (`3DFACE` + `POLYLINE 3D` on `WALLS_3D` / `SLABS` layers)
 
 ### US-022 · As a backend dev, I want to add floor and ceiling slabs
+
 - **Priority:** P1 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p4-3d`
 - **Acceptance Criteria:**
   - [x] Detect room polygons from segmentation
@@ -394,6 +422,7 @@
 ## Epic 4.2 — 3D Preview & Export
 
 ### US-023 · As a user, I want to see a 3D preview of the generated model in the browser
+
 - **Priority:** P2 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p4-3d`
 - **Acceptance Criteria:**
   - [x] Job detail page renders a 3D scene when job mode is `3d`
@@ -410,6 +439,7 @@
 > produced for US-024 and avoids shipping a DXF parser to the client.
 
 ### US-024 · As a user, I want to download the 3D model in a standard format
+
 - **Priority:** P2 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p4-3d`
 - **Acceptance Criteria:**
   - [x] In addition to DXF, export to GLB (binary glTF)
@@ -429,60 +459,69 @@
 ## Epic 5.1 — DWG Export
 
 ### US-025 · As a user, I want to download a true DWG file (not just DXF)
-- **Priority:** P1 · **Effort:** L · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p5-polish`
+
+- **Priority:** P1 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p5-polish`
 - **Acceptance Criteria:**
-  - [ ] DWG file generated alongside DXF
-  - [ ] Uses `libredwg` or ODA `FileConverter` (Docker sidecar)
-  - [ ] User-selectable output format (DXF / DWG / both)
-  - [ ] Output opens in AutoCAD without conversion errors
+  - [x] DWG file generated alongside DXF
+  - [x] Uses `libredwg` or ODA `FileConverter` (Docker sidecar)
+  - [x] User-selectable output format (DXF / DWG / both)
+  - [x] Output opens in AutoCAD without conversion errors
 - **Tasks:**
-  - [ ] T-081 — Spike: Choose between libredwg vs ODA FileConverter
-  - [ ] T-082 — Add DWG conversion service (Docker service in `docker-compose.yml`)
-  - [ ] T-083 — Implement `DwgConverter` post-processor
-  - [ ] T-084 — Update job config to accept `output_format: "dxf" | "dwg" | "both"`
+  - [x] T-081 — Spike: Choose between libredwg vs ODA FileConverter
+  - [x] T-082 — Add DWG conversion service (Docker service in `docker-compose.yml`)
+  - [x] T-083 — Implement `DwgConverter` post-processor
+  - [x] T-084 — Update job config to accept `output_format: "dxf" | "dwg" | "both"`
+
+> **Note:** DWG is proprietary, so the implementation does not bundle converter
+> binaries. Operators can set `DWG_CONVERTER_COMMAND` for libredwg's `dwgwrite`,
+> ODA FileConverter, or a shared-volume Docker sidecar. Tests verify command
+> invocation, artifact creation, failure surfacing, and safe download serving.
 
 ## Epic 5.2 — History & Job Management
 
 ### US-026 · As a user, I want to see my past conversions
-- **Priority:** P1 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p5-polish`
+
+- **Priority:** P1 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p5-polish`
 - **Acceptance Criteria:**
-  - [ ] `/history` page lists all past jobs
-  - [ ] Sortable by date, filterable by status
-  - [ ] Click to re-open job detail page
-  - [ ] Delete button with confirmation
+  - [x] `/history` page lists all past jobs
+  - [x] Sortable by date, filterable by status
+  - [x] Click to re-open job detail page
+  - [x] Delete button with confirmation
 - **Tasks:**
-  - [ ] T-085 — Create `app/history/page.tsx`
-  - [ ] T-086 — Implement `GET /api/v1/jobs?status=...&page=...` pagination
-  - [ ] T-087 — Create `components/history/JobTable.tsx`
-  - [ ] T-088 — Implement `DELETE /api/v1/jobs/{id}` frontend action
+  - [x] T-085 — Create `app/history/page.tsx`
+  - [x] T-086 — Implement `GET /api/v1/jobs?status=...&page=...` pagination
+  - [x] T-087 — Create `components/history/JobTable.tsx`
+  - [x] T-088 — Implement `DELETE /api/v1/jobs/{id}` frontend action
 
 ## Epic 5.3 — Error Handling & Resilience
 
 ### US-027 · As a backend dev, I want robust error handling and retries
-- **Priority:** P1 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p5-polish`
+
+- **Priority:** P1 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p5-polish`
 - **Acceptance Criteria:**
-  - [ ] Failed jobs store `error_msg` and a stack trace
-  - [ ] Celery task retries with exponential backoff (3 attempts)
-  - [ ] User sees actionable error message in UI
-  - [ ] "Retry" button re-enqueues the job with same config
+  - [x] Failed jobs store `error_msg` and a stack trace
+  - [x] Celery task retries with exponential backoff (3 attempts)
+  - [x] User sees actionable error message in UI
+  - [x] "Retry" button re-enqueues the job with same config
 - **Tasks:**
-  - [ ] T-089 — Add retry decorator to Celery tasks
-  - [ ] T-090 — Implement global exception handler in FastAPI
-  - [ ] T-091 — Add error toast in `DownloadButton` and `ProgressTracker`
+  - [x] T-089 — Add retry decorator to Celery tasks
+  - [x] T-090 — Implement global exception handler in FastAPI
+  - [x] T-091 — Add error toast in `DownloadButton` and `ProgressTracker`
 
 ## Epic 5.4 — File Lifecycle & Storage
 
 ### US-028 · As an operator, I want uploaded and output files auto-cleaned after 7 days
-- **Priority:** P2 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p5-polish`
+
+- **Priority:** P2 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p5-polish`
 - **Acceptance Criteria:**
-  - [ ] Celery beat task runs daily
-  - [ ] Deletes files older than 7 days
-  - [ ] Marks corresponding jobs as `archived`
-  - [ ] Logs the cleanup activity
+  - [x] Celery beat task runs daily
+  - [x] Deletes files older than 7 days
+  - [x] Marks corresponding jobs as `archived`
+  - [x] Logs the cleanup activity
 - **Tasks:**
-  - [ ] T-092 — Create `backend/app/tasks/cleanup.py` beat schedule
-  - [ ] T-093 — Add `archived` status enum value
-  - [ ] T-094 — Wire beat into `docker-compose.yml`
+  - [x] T-092 — Create `backend/app/tasks/cleanup.py` beat schedule
+  - [x] T-093 — Add `archived` status enum value
+  - [x] T-094 — Wire beat into `docker-compose.yml`
 
 ---
 
@@ -496,14 +535,14 @@ All implementation work is tracked as **GitHub Issues** on the project repo. Two
 
 ## A.0 Live state of this repo
 
-| Resource | Where |
-|---|---|
-| Project board | https://github.com/users/Josh-Uvi/projects/1 (Status: `Todo` / `In Progress` / `Done`) |
-| Milestones (one per stage) | `Stage 0: Bootstrap` -> `Stage 5: Polish & DWG` (6 total) |
-| User-story issues | `#1` ... `#28` (one per `US-###` defined below) |
-| Parent tracking issue | `#29` - "AI File Converter - PDF to DWG (project root)" |
-| Auto-sync workflow | `.github/workflows/project-sync.yml` |
-| CI workflow | `.github/workflows/ci.yml` |
+| Resource                   | Where                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| Project board              | https://github.com/users/Josh-Uvi/projects/1 (Status: `Todo` / `In Progress` / `Done`) |
+| Milestones (one per stage) | `Stage 0: Bootstrap` -> `Stage 5: Polish & DWG` (6 total)                              |
+| User-story issues          | `#1` ... `#28` (one per `US-###` defined below)                                        |
+| Parent tracking issue      | `#29` - "AI File Converter - PDF to DWG (project root)"                                |
+| Auto-sync workflow         | `.github/workflows/project-sync.yml`                                                   |
+| CI workflow                | `.github/workflows/ci.yml`                                                             |
 
 ## A.6 Automation: workflows on push and PR
 
@@ -513,12 +552,12 @@ Two GitHub Actions workflows drive the board. Both run automatically on every pu
 
 **`project-sync.yml`** - The key board automation. It listens for `issues`, `pull_request`, and `push` events and, via the GraphQL API, moves the linked card to the correct Status column:
 
-| Event | Card moves to |
-|---|---|
-| Issue `opened` / `reopened` | `Todo` |
-| Pull request `opened` / `synchronize` | `In Progress` |
-| Issue `closed` | `Done` |
-| Pull request `closed` (merged or not) | `Done` |
+| Event                                                                 | Card moves to                         |
+| --------------------------------------------------------------------- | ------------------------------------- |
+| Issue `opened` / `reopened`                                           | `Todo`                                |
+| Pull request `opened` / `synchronize`                                 | `In Progress`                         |
+| Issue `closed`                                                        | `Done`                                |
+| Pull request `closed` (merged or not)                                 | `Done`                                |
 | Push to `main` whose commit message contains `Closes #N` / `Fixes #N` | `Done` (and the issue is auto-closed) |
 
 The default `GITHUB_TOKEN` is sufficient. If your org requires finer-grained permissions, add a `PROJECT_TOKEN` secret (PAT with `project` scope) and the workflow will prefer it.
@@ -560,16 +599,16 @@ gh repo view
 
 ## A.2 Mapping our Hierarchy → GitHub Concepts
 
-| Our concept | GitHub equivalent |
-|---|---|
-| Stage (0–5) | **Milestone** |
-| Epic (e.g. 0.1, 1.1) | **Label** (`epic:p1-scaffold`, etc.) |
-| User Story (US-001 …) | **Issue** with title prefix `[US-001]` |
-| Acceptance Criteria / Tasks | **Markdown checkboxes inside the issue body** |
-| Priority (P0–P3) | **Label** `priority:p0` … `priority:p3` |
-| Area / Type | **Labels** `area:backend`, `type:feature`, etc. |
-| Status | **Project board column** or **Issue state** (open/closed) |
-| Cycle / Sprint | **Milestone due date** or **GitHub Project iteration** |
+| Our concept                 | GitHub equivalent                                         |
+| --------------------------- | --------------------------------------------------------- |
+| Stage (0–5)                 | **Milestone**                                             |
+| Epic (e.g. 0.1, 1.1)        | **Label** (`epic:p1-scaffold`, etc.)                      |
+| User Story (US-001 …)       | **Issue** with title prefix `[US-001]`                    |
+| Acceptance Criteria / Tasks | **Markdown checkboxes inside the issue body**             |
+| Priority (P0–P3)            | **Label** `priority:p0` … `priority:p3`                   |
+| Area / Type                 | **Labels** `area:backend`, `type:feature`, etc.           |
+| Status                      | **Project board column** or **Issue state** (open/closed) |
+| Cycle / Sprint              | **Milestone due date** or **GitHub Project iteration**    |
 
 ## A.3 Bootstrap the Repo (Labels, Milestones, First Issues)
 
@@ -684,27 +723,27 @@ gh pr create --title "[US-001] Monorepo layout" --body "Closes #12"
 
 When Cline, Claude Desktop, or another MCP-compatible client has the **GitHub MCP server** enabled, the same workflow runs from the chat:
 
-| Action | MCP tool call (pseudocode) |
-|---|---|
-| Create issue | `mcp_github_create_issue({ title, body, labels, milestone })` |
-| List my issues | `mcp_github_list_issues({ assignee: "me", state: "open" })` |
-| Comment on issue | `mcp_github_add_issue_comment({ issue_number, body })` |
-| Update labels | `mcp_github_update_issue({ issue_number, labels: [...] })` |
-| Create PR | `mcp_github_create_pull_request({ title, body, head, base })` |
-| Search code | `mcp_github_search_code({ q: "repo:owner/name PipelineStep" })` |
+| Action           | MCP tool call (pseudocode)                                      |
+| ---------------- | --------------------------------------------------------------- |
+| Create issue     | `mcp_github_create_issue({ title, body, labels, milestone })`   |
+| List my issues   | `mcp_github_list_issues({ assignee: "me", state: "open" })`     |
+| Comment on issue | `mcp_github_add_issue_comment({ issue_number, body })`          |
+| Update labels    | `mcp_github_update_issue({ issue_number, labels: [...] })`      |
+| Create PR        | `mcp_github_create_pull_request({ title, body, head, base })`   |
+| Search code      | `mcp_github_search_code({ q: "repo:owner/name PipelineStep" })` |
 
 The GitHub MCP server mirrors the `gh` CLI surface, so the bulk-creation script in §A.4 can be reproduced in a single agent prompt.
 
 ## A.9 Suggested Milestone Plan
 
-| Milestone | Stories | Goal |
-|---|---|---|
-| **Stage 0: Bootstrap** | US-001 → US-004 | Repo, tooling, CI scaffold |
-| **Stage 1: MVP Skeleton** | US-005 → US-011 | Upload + queue + job tracking |
-| **Stage 2: PDF Parsing** | US-012 → US-015 | Extract & preview page images |
-| **Stage 3: 2D Vectorization** | US-016 → US-020 | PDF → DXF (core value) |
-| **Stage 4: 3D Extrusion** | US-021 → US-024 | Walls → 3D model |
-| **Stage 5: Polish & DWG** | US-025 → US-028 | Production-ready with DWG export |
+| Milestone                     | Stories         | Goal                             |
+| ----------------------------- | --------------- | -------------------------------- |
+| **Stage 0: Bootstrap**        | US-001 → US-004 | Repo, tooling, CI scaffold       |
+| **Stage 1: MVP Skeleton**     | US-005 → US-011 | Upload + queue + job tracking    |
+| **Stage 2: PDF Parsing**      | US-012 → US-015 | Extract & preview page images    |
+| **Stage 3: 2D Vectorization** | US-016 → US-020 | PDF → DXF (core value)           |
+| **Stage 4: 3D Extrusion**     | US-021 → US-024 | Walls → 3D model                 |
+| **Stage 5: Polish & DWG**     | US-025 → US-028 | Production-ready with DWG export |
 
 ---
 
@@ -747,4 +786,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.8 — updated 2026-07-27 to reflect Stage 4 3D extrusion (Epics 4.1/4.2). US-001 ✅ Done; US-002 → US-024 👀 In Review.*
+_Document version 0.9 — updated 2026-07-27 to reflect Stage 5 polish, DWG export, job history, retries, and cleanup (Epics 5.1/5.4). US-001 ✅ Done; US-002 → US-028 👀 In Review._
