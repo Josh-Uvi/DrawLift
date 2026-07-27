@@ -1,21 +1,26 @@
 """Job API endpoints: POST /jobs, GET /jobs/{id}, GET /jobs."""
 
 import json
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.job import Job
-from app.schemas.job import JobCreateResponse, JobListResponse, JobStatus
+from app.schemas.job import JobConfig, JobCreateResponse, JobListResponse, JobStatus
 from app.storage.local import get_storage
 from app.tasks.placeholder import process_job
 
 router = APIRouter()
 
-DEFAULT_CONFIG = '{"mode": "2d", "dpi": 300, "floor_height_m": 3.0, "output_format": "dxf"}'
+DEFAULT_CONFIG = (
+    '{"mode": "2d", "dpi": 300, "floor_height_m": 3.0, '
+    '"output_format": "dxf", "segmenter": "classic"}'
+)
 
 
 @router.post("/jobs", response_model=JobCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -48,18 +53,23 @@ async def create_job(
 
     # Parse config
     try:
-        config_dict = json.loads(config)
+        raw_config = json.loads(config)
+        typed_config: dict[str, Any] = JobConfig.model_validate(raw_config).model_dump()
     except json.JSONDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid config JSON",
         )
-
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=exc.errors(),
+        ) from exc
     # Create job in DB
     job = Job(
         status="pending",
         progress=0,
-        config=config_dict,
+        config=typed_config,
         input_file="",  # will be set after save
     )
     db.add(job)
@@ -72,7 +82,7 @@ async def create_job(
     await db.flush()
 
     # Enqueue Celery task
-    process_job.delay(str(job.id), config_dict)
+    process_job.delay(str(job.id), typed_config)
 
     return JobCreateResponse(job_id=str(job.id))
 

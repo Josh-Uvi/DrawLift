@@ -6,9 +6,17 @@ from app.pipeline.progress import ProgressEvent, RedisProgressPublisher, get_pro
 from app.pipeline.steps.base import PipelineStep
 from app.pipeline.steps.pdf_parser import PdfParserStep
 from app.pipeline.steps.preprocessor import OpenCVPreprocessor
+from app.pipeline.steps.segmenter import (
+    ClassicCVSegmenter,
+    OnnxSemanticSegmenter,
+    SegmenterStep,
+    preload_configured_segmentation_model,
+)
 
 __all__ = [
+    "ClassicCVSegmenter",
     "OpenCVPreprocessor",
+    "OnnxSemanticSegmenter",
     "Pipeline",
     "PipelineContext",
     "PipelineStep",
@@ -16,6 +24,8 @@ __all__ = [
     "ProgressEvent",
     "ProgressPublisher",
     "RedisProgressPublisher",
+    "SegmenterStep",
     "create_pipeline",
     "get_progress_publisher",
+    "preload_configured_segmentation_model",
 ]

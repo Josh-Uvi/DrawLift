@@ -40,7 +40,7 @@
 | 0 | **Bootstrap** | Repo, tooling, CI scaffold | 🚧 In Progress | 4 | 12 |
 | 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | 👀 In Review | 5 | 18 |
 | 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | 🚧 In Progress | 4 | 14 |
-| 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | ⬜ Backlog | 5 | 16 |
+| 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | 🚧 In Progress | 5 | 16 |
 | 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | ⬜ Backlog | 4 | 12 |
 | 5 | **Phase 5 — Polish & DWG** | Production-ready with DWG export | ⬜ Backlog | 6 | 20 |
 
@@ -58,6 +58,7 @@
 | 2026-07-23 | Stage 2 — US-013 | Not opened | US-013 | PyMuPDF parser step extracts PDF pages to configurable-DPI PNG images and reports the 20% pipeline milestone on `feat/us-013-pdf-page-extraction`. |
 | 2026-07-23 | Stage 2 — US-014 | Not opened | US-014 | OpenCV preprocessing converts pages to grayscale binary arrays, applies blur and adaptive thresholding, corrects skew, and reports the 35% milestone on `feature/US-014-opencv-preprocessing`. |
 | 2026-07-27 | Stage 2 — US-015 | Not opened | US-015 | Page thumbnail preview: backend endpoint (`GET /jobs/{id}/pages/{n}`), PageViewer horizontal thumbnail strip, and click-to-enlarge modal on the job detail page on `feature/US-015-page-thumbnails`. |
+| 2026-07-27 | Stage 3 — Epic 3.1 | Not opened | US-016 → US-017 | Semantic segmentation step with CPU ONNX Runtime backend, cached model loading, persisted per-label masks, and Classic CV fallback selectable via job config on `feature/epic-3-1-semantic-segmentation`. |
 
 ---
 
@@ -296,28 +297,28 @@
 ## Epic 3.1 — Semantic Segmentation
 
 ### US-016 · As a backend dev, I want to integrate an ML segmentation model
-- **Priority:** P0 · **Effort:** L · **Status:** ⬜ Backlog · **Labels:** `area:ml`, `area:backend`, `epic:p3-vectorize`
+- **Priority:** P0 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:ml`, `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
-  - [ ] Model loads once at worker startup (not per request)
-  - [ ] Inference runs on CPU via ONNX Runtime
-  - [ ] Returns per-pixel masks for: walls, doors, windows, rooms, text
-  - [ ] Reports `progress = 60%`
+  - [x] Model loads once at worker startup (not per request)
+  - [x] Inference runs on CPU via ONNX Runtime
+  - [x] Returns per-pixel masks for: walls, doors, windows, rooms, text
+  - [x] Reports `progress = 60%`
 - **Tasks:**
-  - [ ] T-052 — Spike: Evaluate pre-trained floor plan models (CubiCasa5K-based)
-  - [ ] T-053 — Add `onnxruntime` to requirements
-  - [ ] T-054 — Implement `SegmenterStep` in `backend/app/pipeline/steps/segmenter.py`
-  - [ ] T-055 — Download/cache ONNX model weights in `models/` volume
-  - [ ] T-056 — Unit test inference on sample input
+  - [x] T-052 — Spike: Evaluate pre-trained floor plan models (CubiCasa5K-based)
+  - [x] T-053 — Add `onnxruntime` to requirements
+  - [x] T-054 — Implement `SegmenterStep` in `backend/app/pipeline/steps/segmenter.py`
+  - [x] T-055 — Download/cache ONNX model weights in `models/` volume
+  - [x] T-056 — Unit test inference on sample input
 
 ### US-017 · As a backend dev, I want a non-ML fallback for simple line drawings
-- **Priority:** P2 · **Effort:** L · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p3-vectorize`
+- **Priority:** P2 · **Effort:** L · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p3-vectorize`
 - **Acceptance Criteria:**
-  - [ ] `ClassicCVSegmenter` using threshold + Hough line detection
-  - [ ] User-selectable via job config (`segmenter: "ml" | "classic"`)
-  - [ ] Significantly faster than ML path
+  - [x] `ClassicCVSegmenter` using threshold + Hough line detection
+  - [x] User-selectable via job config (`segmenter: "ml" | "classic"`)
+  - [x] Significantly faster than ML path
 - **Tasks:**
-  - [ ] T-057 — Implement `ClassicCVSegmenter`
-  - [ ] T-058 — Add config flag in `PipelineContext`
+  - [x] T-057 — Implement `ClassicCVSegmenter`
+  - [x] T-058 — Add config flag in `PipelineContext`
 
 ## Epic 3.2 — Vectorization
 
@@ -740,4 +741,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.6 — updated 2026-07-27 to reflect US-015 page thumbnail preview. US-001 ✅ Done; US-002 → US-015 👀 In Review.*
+*Document version 0.7 — updated 2026-07-27 to reflect Epic 3.1 semantic segmentation. US-001 ✅ Done; US-002 → US-017 👀 In Review.*

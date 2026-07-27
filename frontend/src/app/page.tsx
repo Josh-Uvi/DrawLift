@@ -18,6 +18,7 @@ export default function HomePage() {
     dpi: 300,
     floor_height_m: 3.0,
     output_format: "dxf",
+    segmenter: "classic",
   });
   const [uploading, setUploading] = useState(false);
 
