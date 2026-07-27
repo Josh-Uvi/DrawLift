@@ -40,6 +40,7 @@ class Job(Base):
     output_file: Mapped[str | None] = mapped_column(String(500), nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

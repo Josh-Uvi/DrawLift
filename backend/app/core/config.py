@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Storage
     STORAGE_PATH: str = "./storage"
+    STORAGE_TTL_DAYS: int = 7
 
     # ML models
     MODELS_PATH: str = "./models"
@@ -35,6 +36,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     APP_NAME: str = "AI File Converter"
     API_V1_PREFIX: str = "/api/v1"
+
+    # DWG conversion
+    DWG_CONVERTER_COMMAND: str | None = None
 
 
 @lru_cache
