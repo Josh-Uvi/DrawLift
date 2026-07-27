@@ -10,15 +10,15 @@ fileignoreconfig:
 - filename: .github/workflows/pr-agent.yml
   checksum: 029fbcf2e43a8b51d187cc9f29a8eeb3de4504a14d5b9c1120072cf950f00d33
 - filename: frontend/package-lock.json
-  checksum: 420a5bb16709bc984a128ca142ede5b5f2a1ac311d2c465912ab6bf99a39b3b4
+  checksum: e2d4b634d51975aea55e32f43c51b61c1d5621a9756959b6258ebb955b7e6f2b
 - filename: TODO.md
-  checksum: ffdf34f37e1ae38fff5ac82933f2da7f91d00b7716cddf3282b3a9993e1f3e20
+  checksum: d1783877818cbb8e282f8b1b212311bad3cbc4f68e59c120fe0afb74d0db289a
 - filename: frontend/src/components/job/PageViewer.tsx
   checksum: 161987d127228af51e82420c88594a54b972c9c7ae6814a36263804cfebc8a31
 - filename: frontend/src/components/job/ImageModal.tsx
   checksum: c32c61f27917ececc5afe2ff60f61881ab0ec0f4cb11383a1066642f34b0d345
 - filename: backend/tests/test_jobs_download.py
-  checksum: bb74a51e99ef29c4123bf6cc8bd273488714ccea3becb1e5570086c31a732576
+  checksum: dd990c0ba5b2711a575a1d6c2932243e2269a92c0044d0a2b78616e4bed10789
 - filename: backend/app/pipeline/steps/vectorizer.py
   checksum: 69a216446d5421c4a5c27f461f6c341934e4cb05a2d0373f11e98f87bed9511f
 version: "1.0"
