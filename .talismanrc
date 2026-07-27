@@ -2,7 +2,7 @@ fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
   checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: .env.example
-  checksum: 5d9b0a2ab0e22992f45af0f65b12c3774e1c033ae106de556969de655a905611
+  checksum: 46473813f9e584b1c580acc20a223b04eeddbf9047df747243521bcf1153a08f
 - filename: backend/alembic/env.py
   checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
 - filename: backend/alembic.ini
@@ -12,13 +12,21 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: e2d4b634d51975aea55e32f43c51b61c1d5621a9756959b6258ebb955b7e6f2b
 - filename: TODO.md
-  checksum: d1783877818cbb8e282f8b1b212311bad3cbc4f68e59c120fe0afb74d0db289a
+  checksum: 3261b46f8b7969a77ed40492f2e3aadec3a2ad42bb9bf21e8d7e5728c47247a6
 - filename: frontend/src/components/job/PageViewer.tsx
   checksum: 161987d127228af51e82420c88594a54b972c9c7ae6814a36263804cfebc8a31
 - filename: frontend/src/components/job/ImageModal.tsx
   checksum: c32c61f27917ececc5afe2ff60f61881ab0ec0f4cb11383a1066642f34b0d345
 - filename: backend/tests/test_jobs_download.py
-  checksum: dd990c0ba5b2711a575a1d6c2932243e2269a92c0044d0a2b78616e4bed10789
+  checksum: 862792199728f5213982e5f2c5d4dbcf01a74298c1ec46f597e64c056b34edc1
 - filename: backend/app/pipeline/steps/vectorizer.py
   checksum: 69a216446d5421c4a5c27f461f6c341934e4cb05a2d0373f11e98f87bed9511f
+- filename: backend/tests/test_dwg_converter_step.py
+  checksum: 084c308be1a36ecea40ee09d99aad0d306710bc7ac25134557dfd10437e2834c
+- filename: backend/tests/test_jobs_management.py
+  checksum: 586e55133d93dc713533e2ceac79ec90db7f5a20e41c84edddba0b4e85335937
+- filename: frontend/src/app/history/page.tsx
+  checksum: 2962c6ac1f8fd80de3734e1998bea00860455a099cba242d227d78378e538c7b
+- filename: frontend/src/components/history/JobTable.tsx
+  checksum: ea9ed540884f893a02d0efd11f9787cece503ad543a09724f9c67b17c3817ed0
 version: "1.0"
