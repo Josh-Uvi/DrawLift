@@ -1,8 +1,25 @@
-"""Placeholder Celery task that simulates the conversion pipeline."""
+"""Celery task that runs the PDF-to-DXF conversion pipeline."""
 
-import time
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
 from typing import Any
+from uuid import UUID
 
+from sqlalchemy import select
+
+from app.core.database import async_session
+from app.models.job import Job
+from app.pipeline import (
+    DxfWriterStep,
+    OpenCVPreprocessor,
+    PdfParserStep,
+    Pipeline,
+    PipelineContext,
+    SegmenterStep,
+    VectorizerStep,
+)
 from app.pipeline.progress import get_progress_publisher
 from app.tasks.celery_app import celery_app
 
@@ -26,7 +43,7 @@ def publish_progress(job_id: str, status: str, progress: int, step: str) -> None
 
 @celery_app.task(name="app.tasks.placeholder.process_job")
 def process_job(job_id: str, config: dict[str, Any]) -> str:
-    """Simulate the conversion pipeline with progress updates.
+    """Run the real conversion pipeline and persist job progress.
 
     Args:
         job_id: The job UUID as a string.
@@ -35,18 +52,67 @@ def process_job(job_id: str, config: dict[str, Any]) -> str:
     Returns:
         "completed" on success.
     """
-    steps = [
-        ("PDF Parsing", 20),
-        ("Preprocessing", 35),
-        ("Segmentation", 60),
-        ("Vectorization", 80),
-        ("DXF Writer", 95),
-        ("Completed", 100),
-    ]
+    return asyncio.run(_process_job_async(job_id, config))
 
-    for step_name, progress in steps:
-        time.sleep(2)  # simulate work
-        status = "processing" if progress < 100 else "completed"
-        publish_progress(job_id, status, progress, step_name)
 
+async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
+    """Async implementation used by the sync Celery task entrypoint."""
+    async with async_session() as session:
+        result = await session.execute(select(Job).where(Job.id == UUID(job_id)))
+        job = result.scalar_one_or_none()
+        if job is None:
+            raise ValueError(f"Job {job_id} not found")
+
+        job.status = "processing"
+        job.progress = 0
+        job.step = "Starting"
+        job.error_msg = None
+        await session.commit()
+
+        if not job.input_file:
+            raise ValueError(f"Job {job_id} has no input file")
+        input_path = Path(job.input_file).resolve()
+        job_dir = input_path.parent
+
+        context = PipelineContext(
+            job_id=job_id,
+            input_path=input_path,
+            config=config,
+            progress_publisher=get_progress_publisher(),
+        )
+        pipeline = Pipeline.from_steps(
+            PdfParserStep(output_dir=job_dir / "pages"),
+            OpenCVPreprocessor(output_dir=job_dir / "preprocessed"),
+            SegmenterStep(output_dir=job_dir / "masks"),
+            VectorizerStep(),
+            DxfWriterStep(output_path=job_dir / "output" / "output.dxf"),
+            publish_step_progress=False,
+        )
+
+        try:
+            result_context = pipeline.run(context)
+        except Exception as exc:
+            job.status = "failed"
+            job.step = "Failed"
+            job.error_msg = str(exc)
+            await session.commit()
+            get_progress_publisher().publish(
+                job_id=job_id,
+                status="failed",
+                progress=job.progress,
+                step="Failed",
+                message=str(exc),
+            )
+            raise
+
+        job.status = "completed"
+        job.progress = 100
+        job.step = "Completed"
+        job.output_file = str(result_context.output_path) if result_context.output_path else None
+        page_count = result_context.metadata.get("page_count")
+        if isinstance(page_count, int):
+            job.page_count = page_count
+        await session.commit()
+
+    publish_progress(job_id, "completed", 100, "Completed")
     return "completed"
