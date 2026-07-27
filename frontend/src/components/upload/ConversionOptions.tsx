@@ -65,31 +65,63 @@ export default function ConversionOptions({
       </div>
 
       {config.mode === "3d" && (
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Floor Height (m)</label>
-          <input
-            type="number"
-            min={0.5}
-            max={10}
-            step={0.1}
-            value={config.floor_height_m}
-            onChange={(e) => onChange({ ...config, floor_height_m: Number(e.target.value) })}
-            disabled={disabled}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          />
-        </div>
+        <>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Floor Height (m)</label>
+            <input
+              type="number"
+              min={0.5}
+              max={10}
+              step={0.1}
+              value={config.floor_height_m}
+              onChange={(e) => onChange({ ...config, floor_height_m: Number(e.target.value) })}
+              disabled={disabled}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Slab Thickness (m)
+            </label>
+            <input
+              type="number"
+              min={0.05}
+              max={2}
+              step={0.05}
+              value={config.slab_thickness_m ?? 0.2}
+              onChange={(e) => onChange({ ...config, slab_thickness_m: Number(e.target.value) })}
+              disabled={disabled}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={config.include_ceiling ?? false}
+              onChange={(e) => onChange({ ...config, include_ceiling: e.target.checked })}
+              disabled={disabled}
+              className="h-4 w-4 accent-primary"
+            />
+            Add ceiling slab at floor height
+          </label>
+        </>
       )}
 
       <div>
         <label className="mb-2 block text-sm font-medium text-gray-700">Output Format</label>
         <select
           value={config.output_format}
-          onChange={(e) => onChange({ ...config, output_format: e.target.value as "dxf" | "dwg" })}
+          onChange={(e) =>
+            onChange({ ...config, output_format: e.target.value as "dxf" | "dwg" | "glb" })
+          }
           disabled={disabled}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
           <option value="dxf">DXF</option>
           <option value="dwg">DWG</option>
+          {config.mode === "3d" && <option value="glb">GLB (3D model)</option>}
         </select>
       </div>
 

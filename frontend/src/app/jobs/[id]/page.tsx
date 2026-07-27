@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Card from "@/components/shared/Card";
 import ProgressTracker from "@/components/job/ProgressTracker";
@@ -8,6 +9,11 @@ import PageViewer from "@/components/job/PageViewer";
 import DownloadButton from "@/components/job/DownloadButton";
 import { getJob } from "@/lib/api";
 import type { Job } from "@/types/api";
+
+const Model3DPreview = dynamic(() => import("@/components/job/Model3DPreview"), {
+  ssr: false,
+  loading: () => <p className="text-center text-sm text-gray-600">Loading 3D preview…</p>,
+});
 
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -50,8 +56,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <PageViewer jobId={id} pageCount={job.page_count} />
           </div>
         )}
+        {job && job.status === "completed" && job.config?.mode === "3d" && (
+          <div className="mt-6">
+            <Model3DPreview jobId={id} />
+          </div>
+        )}
         <div className="mt-6">
-          <DownloadButton jobId={id} isReady={job?.status === "completed"} />
+          <DownloadButton
+            jobId={id}
+            isReady={job?.status === "completed"}
+            is3D={job?.config?.mode === "3d"}
+          />
         </div>
       </Card>
     </div>

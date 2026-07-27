@@ -13,12 +13,15 @@ from app.core.database import async_session
 from app.models.job import Job
 from app.pipeline import (
     DxfWriterStep,
+    GlbWriterStep,
     OpenCVPreprocessor,
     PdfParserStep,
     Pipeline,
     PipelineContext,
+    PipelineStep,
     SegmenterStep,
     VectorizerStep,
+    WallExtruderStep,
 )
 from app.pipeline.progress import get_progress_publisher
 from app.tasks.celery_app import celery_app
@@ -80,14 +83,20 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
             config=config,
             progress_publisher=get_progress_publisher(),
         )
-        pipeline = Pipeline.from_steps(
+
+        steps: list[PipelineStep] = [
             PdfParserStep(output_dir=job_dir / "pages"),
             OpenCVPreprocessor(output_dir=job_dir / "preprocessed"),
             SegmenterStep(output_dir=job_dir / "masks"),
             VectorizerStep(),
-            DxfWriterStep(output_path=job_dir / "output" / "output.dxf"),
-            publish_step_progress=False,
-        )
+        ]
+        if config.get("mode") == "3d":
+            steps.append(WallExtruderStep())
+        steps.append(DxfWriterStep(output_path=job_dir / "output" / "output.dxf"))
+        if config.get("mode") == "3d":
+            steps.append(GlbWriterStep(output_path=job_dir / "output" / "output.glb"))
+
+        pipeline = Pipeline.from_steps(*steps, publish_step_progress=False)
 
         try:
             result_context = pipeline.run(context)

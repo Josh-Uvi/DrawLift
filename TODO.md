@@ -41,7 +41,7 @@
 | 1 | **Phase 1 — MVP Skeleton** | Upload + queue + job tracking | 👀 In Review | 5 | 18 |
 | 2 | **Phase 2 — PDF Parsing** | Extract & preview page images | 🚧 In Progress | 4 | 14 |
 | 3 | **Phase 3 — 2D Vectorization** | PDF → DXF (core value) | 👀 In Review | 5 | 16 |
-| 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | ⬜ Backlog | 4 | 12 |
+| 4 | **Phase 4 — 3D Extrusion** | Walls → 3D model | 👀 In Review | 4 | 12 |
 | 5 | **Phase 5 — Polish & DWG** | Production-ready with DWG export | ⬜ Backlog | 6 | 20 |
 
 **Total: 28 user stories · 92 actionable tasks**
@@ -60,6 +60,7 @@
 | 2026-07-27 | Stage 2 — US-015 | Not opened | US-015 | Page thumbnail preview: backend endpoint (`GET /jobs/{id}/pages/{n}`), PageViewer horizontal thumbnail strip, and click-to-enlarge modal on the job detail page on `feature/US-015-page-thumbnails`. |
 | 2026-07-27 | Stage 3 — Epic 3.1 | Not opened | US-016 → US-017 | Semantic segmentation step with CPU ONNX Runtime backend, cached model loading, persisted per-label masks, and Classic CV fallback selectable via job config on `feature/epic-3-1-semantic-segmentation`. |
 | 2026-07-27 | Stage 3 — Epic 3.2/3.3 | Not opened | US-018 → US-020 | Semantic masks now vectorize into CAD primitives, write readable layered DXF files with `ezdxf`, run through the real Celery pipeline, and expose completed-job DXF downloads on `feature/epic-3-vectorization-dxf`. |
+| 2026-07-27 | Stage 4 — Epic 4.1/4.2 | Not opened | US-021 → US-024 | 3D extrusion lifts walls into rectangular prisms with floor/ceiling slabs, writes 3D DXF (`3DFACE`/`POLYLINE 3D`) plus a self-contained GLB via `trimesh`, adds a `three`/`@react-three/fiber` browser preview with orbit controls and wireframe/solid toggle, and serves `?format=glb` downloads on `feature/stage-4-3d-extrusion`. |
 
 ---
 
@@ -368,52 +369,56 @@
 ## Epic 4.1 — Wall Extrusion
 
 ### US-021 · As a backend dev, I want to extrude wall segments into 3D volumes
-- **Priority:** P0 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p4-3d`
+- **Priority:** P0 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p4-3d`
 - **Acceptance Criteria:**
-  - [ ] Each wall becomes a rectangular prism with floor-height as Z-dimension
-  - [ ] Walls respect their original `(start, end, thickness)` geometry
-  - [ ] Configurable floor height (default 3.0m)
-  - [ ] Reports `progress = 85%`
+  - [x] Each wall becomes a rectangular prism with floor-height as Z-dimension
+  - [x] Walls respect their original `(start, end, thickness)` geometry
+  - [x] Configurable floor height (default 3.0m)
+  - [x] Reports `progress = 85%`
 - **Tasks:**
-  - [ ] T-068 — Implement `WallExtruderStep` in `backend/app/pipeline/steps/extruder.py`
-  - [ ] T-069 — Update `Primitive` dataclass to support 3D (3D point + extrusion)
-  - [ ] T-070 — Add 3D primitives to DXF writer (use POLYLINE 3D / 3DFACE)
+  - [x] T-068 — Implement `WallExtruderStep` in `backend/app/pipeline/steps/extruder.py`
+  - [x] T-069 — Update `Primitive` dataclass to support 3D (`Point3D`, `WallSolidPrimitive`, `SlabPrimitive`)
+  - [x] T-070 — Add 3D primitives to DXF writer (`3DFACE` + `POLYLINE 3D` on `WALLS_3D` / `SLABS` layers)
 
 ### US-022 · As a backend dev, I want to add floor and ceiling slabs
-- **Priority:** P1 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p4-3d`
+- **Priority:** P1 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p4-3d`
 - **Acceptance Criteria:**
-  - [ ] Detect room polygons from segmentation
-  - [ ] Add a slab at z=0 covering the union of rooms
-  - [ ] Optional ceiling at z=floor_height
+  - [x] Detect room polygons from segmentation
+  - [x] Add a slab at z=0 covering the union of rooms
+  - [x] Optional ceiling at z=floor_height
 - **Tasks:**
-  - [ ] T-071 — Implement `SlabGenerator` helper in `primitives.py`
-  - [ ] T-072 — Hook slab generation into `WallExtruderStep`
-  - [ ] T-073 — Add slab thickness config (default 0.2m)
+  - [x] T-071 — Implement `SlabGenerator` helper in `primitives.py`
+  - [x] T-072 — Hook slab generation into `WallExtruderStep`
+  - [x] T-073 — Add slab thickness config (default 0.2m)
 
 ## Epic 4.2 — 3D Preview & Export
 
 ### US-023 · As a user, I want to see a 3D preview of the generated model in the browser
-- **Priority:** P2 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p4-3d`
+- **Priority:** P2 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p4-3d`
 - **Acceptance Criteria:**
-  - [ ] Job detail page renders a 3D scene when job mode is `3d`
-  - [ ] Orbit controls (zoom, pan, rotate)
-  - [ ] Toggle between wireframe and solid shading
+  - [x] Job detail page renders a 3D scene when job mode is `3d`
+  - [x] Orbit controls (zoom, pan, rotate)
+  - [x] Toggle between wireframe and solid shading
 - **Tasks:**
-  - [ ] T-074 — Add `three` and `@react-three/fiber` to frontend deps
-  - [ ] T-075 — Create `components/job/Model3DPreview.tsx`
-  - [ ] T-076 — Parse DXF into Three.js geometry in the browser
-  - [ ] T-077 — Add view-mode toggle in `ConversionOptions`
+  - [x] T-074 — Add `three`, `@react-three/fiber`, and `@react-three/drei` to frontend deps
+  - [x] T-075 — Create `components/job/Model3DPreview.tsx`
+  - [x] T-076 — Load the exported GLB into Three.js geometry in the browser (via `useGLTF`)
+  - [x] T-077 — Add 3D view/slab options in `ConversionOptions` and a wireframe/solid toggle in the preview
+
+> **Note:** T-076 loads the backend-generated GLB with `@react-three/drei`'s `useGLTF`
+> instead of parsing DXF in the browser — this reuses the same self-contained model
+> produced for US-024 and avoids shipping a DXF parser to the client.
 
 ### US-024 · As a user, I want to download the 3D model in a standard format
-- **Priority:** P2 · **Effort:** M · **Status:** ⬜ Backlog · **Labels:** `area:backend`, `epic:p4-3d`
+- **Priority:** P2 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:backend`, `epic:p4-3d`
 - **Acceptance Criteria:**
-  - [ ] In addition to DXF, export to GLB (binary glTF)
-  - [ ] GLB is a single self-contained file
-  - [ ] Opens in any 3D viewer (Blender, online viewers)
+  - [x] In addition to DXF, export to GLB (binary glTF)
+  - [x] GLB is a single self-contained file
+  - [x] Opens in any 3D viewer (Blender, online viewers)
 - **Tasks:**
-  - [ ] T-078 — Add `pygltflib` or `trimesh` to requirements
-  - [ ] T-079 — Implement `GlbWriterStep` in `backend/app/pipeline/steps/glb_writer.py`
-  - [ ] T-080 — Update download endpoint to return `output.glb` when format=glb
+  - [x] T-078 — Add `trimesh` (with `shapely` + `manifold3d`) to requirements
+  - [x] T-079 — Implement `GlbWriterStep` in `backend/app/pipeline/steps/glb_writer.py`
+  - [x] T-080 — Update download endpoint to return `output.glb` when `format=glb`
 
 ---
 
@@ -742,4 +747,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.7 — updated 2026-07-27 to reflect Epic 3.1 semantic segmentation. US-001 ✅ Done; US-002 → US-017 👀 In Review.*
+*Document version 0.8 — updated 2026-07-27 to reflect Stage 4 3D extrusion (Epics 4.1/4.2). US-001 ✅ Done; US-002 → US-024 👀 In Review.*

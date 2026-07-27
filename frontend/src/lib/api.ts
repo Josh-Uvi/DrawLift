@@ -1,16 +1,8 @@
-import type { Job, JobCreateResponse, JobListResponse } from "@/types/api";
+import type { Job, JobConfig, JobCreateResponse, JobListResponse } from "@/types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-export async function uploadFile(
-  file: File,
-  config: {
-    mode: "2d" | "3d";
-    dpi: number;
-    floor_height_m: number;
-    output_format: "dxf" | "dwg";
-  }
-): Promise<JobCreateResponse> {
+export async function uploadFile(file: File, config: JobConfig): Promise<JobCreateResponse> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("config", JSON.stringify(config));
@@ -32,8 +24,8 @@ export function getPageImageUrl(jobId: string, pageNumber: number): string {
   return `${API_BASE}/api/v1/jobs/${jobId}/pages/${pageNumber}`;
 }
 
-export function getJobDownloadUrl(jobId: string): string {
-  return `${API_BASE}/api/v1/jobs/${jobId}/download`;
+export function getJobDownloadUrl(jobId: string, format: "dxf" | "glb" = "dxf"): string {
+  return `${API_BASE}/api/v1/jobs/${jobId}/download?format=${format}`;
 }
 
 export async function getJob(jobId: string): Promise<Job> {
