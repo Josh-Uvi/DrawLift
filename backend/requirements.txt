@@ -12,6 +12,9 @@ opencv-python-headless==4.*
 numpy==2.*
 onnxruntime==1.*
 ezdxf==1.*
+trimesh==4.*
+shapely==2.*
+manifold3d==3.*
 ruff==0.8.*
 mypy==1.*
 pre-commit==4.*

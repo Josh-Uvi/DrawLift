@@ -13,7 +13,9 @@ class JobConfig(BaseModel):
     mode: Literal["2d", "3d"] = "2d"
     dpi: int = Field(default=300, ge=72, le=1200)
     floor_height_m: float = Field(default=3.0, ge=0.5, le=10.0)
-    output_format: Literal["dxf", "dwg"] = "dxf"
+    slab_thickness_m: float = Field(default=0.2, ge=0.05, le=2.0)
+    include_ceiling: bool = False
+    output_format: Literal["dxf", "dwg", "glb"] = "dxf"
     segmenter: Literal["ml", "classic"] = "classic"
 
 

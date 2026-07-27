@@ -12,8 +12,10 @@ from app.pipeline.primitives import (
     OpeningPrimitive,
     Primitive,
     RoomPrimitive,
+    SlabPrimitive,
     TextPrimitive,
     WallPrimitive,
+    WallSolidPrimitive,
 )
 from app.pipeline.steps.base import PipelineStep
 
@@ -22,7 +24,10 @@ LAYER_DOORS = "DOORS"
 LAYER_WINDOWS = "WINDOWS"
 LAYER_ROOMS = "ROOMS"
 LAYER_TEXT = "TEXT"
+LAYER_WALLS_3D = "WALLS_3D"
+LAYER_SLABS = "SLABS"
 DXF_LAYERS: tuple[str, ...] = (LAYER_WALLS, LAYER_DOORS, LAYER_WINDOWS, LAYER_ROOMS, LAYER_TEXT)
+DXF_3D_LAYERS: tuple[str, ...] = (LAYER_WALLS_3D, LAYER_SLABS)
 
 
 class DxfWriterStep(PipelineStep):
@@ -77,13 +82,23 @@ class DxfWriterStep(PipelineStep):
                 )
                 text.dxf.insert = (primitive.insertion.x, primitive.insertion.y)
                 text.dxf.rotation = primitive.rotation
+            elif isinstance(primitive, WallSolidPrimitive):
+                _add_wall_solid(modelspace, primitive)
+            elif isinstance(primitive, SlabPrimitive):
+                _add_slab(modelspace, primitive)
 
         document.saveas(output_path)
+
+        has_3d = any(
+            isinstance(primitive, WallSolidPrimitive | SlabPrimitive) for primitive in primitives
+        )
+        layers = list(DXF_LAYERS) + (list(DXF_3D_LAYERS) if has_3d else [])
 
         context.output_path = output_path
         context.metadata["output_format"] = "dxf"
         context.metadata["output_path"] = output_path
-        context.metadata["dxf_layers"] = list(DXF_LAYERS)
+        context.metadata["dxf_layers"] = layers
+        context.metadata["dxf_is_3d"] = has_3d
 
         self.publish_progress(
             context,
@@ -112,6 +127,8 @@ def _ensure_layers(document: ezdxf.document.Drawing) -> None:
         LAYER_WINDOWS: 4,
         LAYER_ROOMS: 2,
         LAYER_TEXT: 1,
+        LAYER_WALLS_3D: 8,
+        LAYER_SLABS: 9,
     }
     for layer, colour in layer_colours.items():
         if layer not in document.layers:
@@ -121,6 +138,39 @@ def _ensure_layers(document: ezdxf.document.Drawing) -> None:
 def _lineweight(thickness: float) -> int:
     """Map estimated wall thickness to a valid DXF lineweight value."""
     return max(13, min(211, int(round(thickness * 10))))
+
+
+def _add_wall_solid(modelspace: Any, primitive: WallSolidPrimitive) -> None:
+    """Render an extruded wall as top/bottom faces plus side 3DFACE walls."""
+    base = [(point.x, point.y, primitive.base_z) for point in primitive.footprint]
+    top = [(point.x, point.y, primitive.top_z) for point in primitive.footprint]
+    if len(base) < 3:
+        return
+
+    dxfattribs = {"layer": LAYER_WALLS_3D}
+    modelspace.add_3dface(base, dxfattribs=dxfattribs)
+    modelspace.add_3dface(top, dxfattribs=dxfattribs)
+    for index in range(len(base)):
+        next_index = (index + 1) % len(base)
+        side = [
+            base[index],
+            base[next_index],
+            top[next_index],
+            top[index],
+        ]
+        modelspace.add_3dface(side, dxfattribs=dxfattribs)
+
+
+def _add_slab(modelspace: Any, primitive: SlabPrimitive) -> None:
+    """Render a slab as a closed 3D polyline outline at its elevation."""
+    points = [(point.x, point.y, primitive.elevation) for point in primitive.polygon]
+    if len(points) < 3:
+        return
+    modelspace.add_polyline3d(
+        [*points, points[0]],
+        dxfattribs={"layer": LAYER_SLABS},
+    )
+    modelspace.add_3dface(points[:4], dxfattribs={"layer": LAYER_SLABS})
 
 
 def _add_opening_block(modelspace: Any, primitive: OpeningPrimitive, layer: str) -> None:

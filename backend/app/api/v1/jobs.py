@@ -2,10 +2,10 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy import func, select
@@ -115,12 +115,19 @@ async def get_job(
     return JobStatus.model_validate(job)
 
 
+DOWNLOAD_FORMATS: dict[str, dict[str, str]] = {
+    "dxf": {"suffix": ".dxf", "filename": "output.dxf", "media_type": "application/dxf"},
+    "glb": {"suffix": ".glb", "filename": "output.glb", "media_type": "model/gltf-binary"},
+}
+
+
 @router.get("/jobs/{job_id}/download")
 async def download_job_output(
     job_id: UUID,
+    format: Annotated[Literal["dxf", "glb"], Query()] = "dxf",
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
-    """Download the generated DXF file for a completed job."""
+    """Download the generated DXF (default) or GLB file for a completed job."""
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -134,11 +141,11 @@ async def download_job_output(
             detail="Job output is not ready for download",
         )
 
-    download_path = _resolve_download_path(job)
+    download_path = _resolve_download_path(job, download_format=format)
     return FileResponse(
         path=str(download_path),
-        media_type="application/dxf",
-        filename=f"drawlift-{job.id}.dxf",
+        media_type=DOWNLOAD_FORMATS[format]["media_type"],
+        filename=f"drawlift-{job.id}.{format}",
     )
 
 
@@ -181,17 +188,31 @@ async def list_jobs(
     )
 
 
-def _resolve_download_path(job: Job) -> Path:
-    """Resolve and validate a job output path before serving it to clients."""
+def _resolve_download_path(job: Job, *, download_format: str = "dxf") -> Path:
+    """Resolve and validate a job output path before serving it to clients.
+
+    The DXF output is derived from the persisted ``output_file`` column. Other
+    formats (e.g. GLB) live alongside it in the same trusted job output
+    directory, so we derive their path from the DXF's parent to keep the
+    ``.resolve()`` + ``relative_to()`` containment checks intact.
+    """
     if not job.output_file:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No output file is available for this job",
         )
 
+    spec = DOWNLOAD_FORMATS.get(download_format)
+    if spec is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported download format: {download_format}",
+        )
+
     storage_base = Path(settings.STORAGE_PATH).resolve()
     job_storage_dir = (storage_base / str(job.id)).resolve()
-    candidate = Path(job.output_file).resolve()
+    dxf_path = Path(job.output_file).resolve()
+    candidate = (dxf_path.parent / spec["filename"]).resolve()
     try:
         job_storage_dir.relative_to(storage_base)
         candidate.relative_to(job_storage_dir)
@@ -201,9 +222,9 @@ def _resolve_download_path(job: Job) -> Path:
             detail="Invalid output path",
         ) from None
 
-    if candidate.suffix.lower() != ".dxf" or not candidate.is_file():
+    if candidate.suffix.lower() != spec["suffix"] or not candidate.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="DXF output file not found",
+            detail=f"{download_format.upper()} output file not found",
         )
     return candidate

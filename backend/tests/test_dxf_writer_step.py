@@ -12,10 +12,12 @@ from app.pipeline.primitives import (
     OpeningPrimitive,
     Point,
     RoomPrimitive,
+    SlabPrimitive,
     TextPrimitive,
     WallPrimitive,
+    WallSolidPrimitive,
 )
-from app.pipeline.steps.dxf_writer import DXF_LAYERS
+from app.pipeline.steps.dxf_writer import DXF_3D_LAYERS, DXF_LAYERS
 
 
 class RecordingPublisher:
@@ -106,3 +108,28 @@ def test_dxf_writer_requires_primitives(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="requires primitives"):
         DxfWriterStep(output_path=tmp_path / "output.dxf").execute(context)
+
+
+def test_dxf_writer_emits_3d_entities_for_solids(tmp_path: Path) -> None:
+    """3D solids and slabs produce 3DFACE entities on dedicated layers."""
+    output_path = tmp_path / "output" / "output.dxf"
+    footprint = (Point(0, 0), Point(100, 0), Point(100, 10), Point(0, 10))
+    slab_polygon = (Point(0, 0), Point(100, 0), Point(100, 80), Point(0, 80))
+    context = PipelineContext(
+        job_id="job-dxf-3d",
+        input_path=tmp_path / "input.pdf",
+        primitives=[
+            WallPrimitive(start=Point(0, 5), end=Point(100, 5), thickness=10),
+            WallSolidPrimitive(footprint=footprint, height=3.0, thickness=10),
+            SlabPrimitive(polygon=slab_polygon, elevation=0.0, thickness=0.2, level="floor"),
+        ],
+    )
+
+    result = DxfWriterStep(output_path=output_path).execute(context)
+
+    assert result.metadata["dxf_is_3d"] is True
+    document = ezdxf.readfile(output_path)
+    layer_names = {layer.dxf.name for layer in document.layers}
+    assert set(DXF_3D_LAYERS).issubset(layer_names)
+    entity_types = {entity.dxftype() for entity in document.modelspace()}
+    assert "3DFACE" in entity_types

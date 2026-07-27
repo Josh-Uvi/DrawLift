@@ -18,6 +18,7 @@ from app.pipeline.progress import ProgressEvent, RedisProgressPublisher, get_pro
 from app.pipeline.steps.base import PipelineStep
 from app.pipeline.steps.dxf_writer import DxfWriterStep
 from app.pipeline.steps.extruder import WallExtruderStep
+from app.pipeline.steps.glb_writer import GlbWriterStep
 from app.pipeline.steps.pdf_parser import PdfParserStep
 from app.pipeline.steps.preprocessor import OpenCVPreprocessor
 from app.pipeline.steps.segmenter import (
@@ -31,6 +32,7 @@ from app.pipeline.steps.vectorizer import VectorizerStep
 __all__ = [
     "ClassicCVSegmenter",
     "DxfWriterStep",
+    "GlbWriterStep",
     "OpeningPrimitive",
     "OpenCVPreprocessor",
     "OnnxSemanticSegmenter",
