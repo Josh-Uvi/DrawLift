@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow), Phase 2 (PDF parsing, preprocessing, page preview), and Epic 3.1 semantic segmentation are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow), Phase 2 (PDF parsing, preprocessing, page preview), and Phase 3 2D vectorization/DXF export are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -67,16 +67,16 @@ The pipeline runs inside the Celery worker and is composed of pluggable steps. E
                       Options: ONNX Runtime CPU model · ClassicCV fallback
        │
        ▼
-[4] Vectorization     Contour detection → polygon simplification → classify as
-                      line / arc / circle. Generate parametric primitives:
-                      wall = (start, end, thickness)
+[4] Vectorization     Wall centerlines + thickness estimation, contour detection,
+                      Douglas-Peucker simplification, and parametric primitives:
+                      walls, doors, windows, rooms, text regions
        │
        ▼
 [5] 3D Extrusion      (if 3D mode) Extrude walls by floor height metadata
    [optional]         or user-specified height. Add slabs and openings.
        │
        ▼
-[6] DWG/DXF Writer    Write primitives to DWG/DXF (see §9 trade-off on DXF-first)
+[6] DXF Writer        Write primitives to layered DXF with ezdxf
        │
        ▼
   Output File
@@ -116,7 +116,8 @@ frontend/src/
 │   ├── job/
 │   │   ├── ProgressTracker.tsx   # Stepper: Uploaded → Processing → Completed
 │   │   ├── PageViewer.tsx        # Horizontal strip of page thumbnails
-│   │   └── ImageModal.tsx        # Click-to-enlarge modal for page preview
+│   │   ├── ImageModal.tsx        # Click-to-enlarge modal for page preview
+│   │   └── DownloadButton.tsx    # Completed-job DXF download link
 │   └── shared/
 │       ├── Button.tsx
 │       └── Card.tsx
@@ -146,7 +147,7 @@ frontend/src/
 | `GET` | `/api/v1/jobs/{id}` | Get job status, progress (0–100), current step |
 | `GET` | `/api/v1/jobs/{id}/stream` | **SSE** — real-time progress updates |
 | `GET` | `/api/v1/jobs/{id}/pages/{n}` | Extracted page image (for preview) |
-| `GET` | `/api/v1/jobs/{id}/download` | Download resulting DWG/DXF (signed/temp URL) |
+| `GET` | `/api/v1/jobs/{id}/download` | Download generated DXF with attachment Content-Disposition |
 | `GET` | `/api/v1/jobs` | List all jobs (paginated, filterable by status) |
 | `DELETE` | `/api/v1/jobs/{id}` | Delete job + associated files |
 | `GET` | `/api/v1/health` | Health check (liveness/readiness) |
@@ -217,7 +218,7 @@ ai-file-converter/
 │   │   │   └── jobs/[id]/page.tsx # Job detail with live progress
 │   │   ├── components/            # React components
 │   │   │   ├── upload/            # DropZone, ConversionOptions
-│   │   │   ├── job/               # ProgressTracker
+│   │   │   ├── job/               # ProgressTracker, PageViewer, DownloadButton
 │   │   │   └── shared/            # Button, Card
 │   │   ├── lib/                    # API client, SSE helper
 │   │   └── types/                  # TypeScript types (mirror backend schemas)
@@ -233,15 +234,15 @@ ai-file-converter/
 │   │   ├── api/
 │   │   │   └── v1/
 │   │   │       ├── health.py      # GET /health
-│   │   │       ├── jobs.py        # POST /jobs, GET /jobs/{id}, GET /jobs
+│   │   │       ├── jobs.py        # jobs CRUD + GET /jobs/{id}/download
 │   │   │       └── jobs_stream.py # GET /jobs/{id}/stream (SSE)
 │   │   ├── core/                   # Config (pydantic-settings), database
 │   │   ├── models/                 # SQLAlchemy ORM (Job model)
-│   │   ├── pipeline/               # PipelineContext, PipelineStep, parser, preprocessing, segmentation, progress
+│   │   ├── pipeline/               # PipelineContext, primitives, parser, preprocessing, segmentation, vectorization, DXF writer, progress
 │   │   ├── schemas/                # Pydantic request/response models
 │   │   ├── storage/                # Storage adapter (LocalStorage, ABC)
-│   │   └── tasks/                  # Celery app + placeholder pipeline
-│   ├── tests/                      # pytest + fixtures (test_health.py)
+│   │   └── tasks/                  # Celery app + conversion pipeline task
+│   ├── tests/                      # pytest coverage for API and pipeline steps
 │   ├── alembic/                    # DB migrations (0001_create_jobs_table)
 │   ├── requirements.txt
 │   ├── pyproject.toml              # ruff, mypy config
@@ -271,7 +272,7 @@ class PipelineStep(ABC):
     def execute(self, context: PipelineContext) -> PipelineContext: ...
 ```
 
-Concrete implementations: `PdfParserStep`, `OpenCVPreprocessor`, `SegmenterStep`, future vectorizers/writers, etc. New approaches drop in without changing `Pipeline.run()`.
+Concrete implementations: `PdfParserStep`, `OpenCVPreprocessor`, `SegmenterStep`, `VectorizerStep`, `DxfWriterStep`, future 3D extruders, etc. New approaches drop in without changing `Pipeline.run()`.
 
 Implemented foundation:
 - `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
@@ -279,6 +280,9 @@ Implemented foundation:
 - `backend/app/pipeline/steps/pdf_parser.py` implements PyMuPDF-backed PDF page extraction.
 - `backend/app/pipeline/steps/preprocessor.py` implements OpenCV grayscale, Gaussian blur, adaptive threshold, and deskew processing.
 - `backend/app/pipeline/steps/segmenter.py` implements ONNX Runtime semantic segmentation plus a Classic CV fallback.
+- `backend/app/pipeline/primitives.py` defines typed CAD primitives (`WallPrimitive`, `OpeningPrimitive`, `RoomPrimitive`, `TextPrimitive`).
+- `backend/app/pipeline/steps/vectorizer.py` converts masks into simplified CAD primitives and reports the 80% milestone.
+- `backend/app/pipeline/steps/dxf_writer.py` writes `WALLS`, `DOORS`, `WINDOWS`, `ROOMS`, and `TEXT` layers to DXF and reports the 95% milestone.
 - `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
 - `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
@@ -319,9 +323,9 @@ result = Pipeline([
     PdfParserStep(),
     OpenCVPreprocessor(gaussian_kernel=(7, 7)),
     SegmenterStep(),  # config: {"segmenter": "ml" | "classic"}
-    ContourVectorizer(simplify_tolerance=2.0),
+    VectorizerStep(simplification_epsilon=2.0),
     WallExtruder(default_height_m=3.0),     # only in 3D mode
-    EzDxfWriter(format="dxf"),
+    DxfWriterStep(),
 ]).run(context)
 ```
 
@@ -361,8 +365,9 @@ result = Pipeline([
 ### Phase 3 — 2D Vectorization (core value)
 - [x] Integrate semantic segmentation with CPU ONNX Runtime and Classic CV fallback
 - [x] Cache/download ONNX weights in the `models/` volume when configured
-- Vectorize detected walls/doors/windows to DXF
-- Downloadable DXF output
+- [x] Vectorize detected walls/doors/windows/rooms/text into CAD primitives
+- [x] Generate layered DXF output with `ezdxf`
+- [x] Downloadable DXF output appears when jobs complete
 
 ### Phase 4 — 3D Extrusion
 - Extrude walls by configurable height
@@ -392,6 +397,7 @@ alembic==1.*              # migrations
 redis==5.*               # Celery broker + Pub/Sub
 pymupdf==1.*             # PDF page rendering
 onnxruntime==1.*         # CPU ML segmentation inference
+ezdxf==1.*              # DXF generation and validation
 sse-starlette==2.*       # SSE streaming
 ruff==0.8.*              # linting
 mypy==1.*                # type checking
@@ -404,8 +410,7 @@ httpx==0.28.*            # test client
 opencv-python-headless==4.*
 numpy==2.*
 
-# Planned for Phase 3+ (not yet installed)
-# ezdxf                     # DXF generation (reliable, open)
+# Planned for Phase 4+
 # libredwg (system-level)   # optional DWG support
 # torch + ultralytics       # training / fine-tuning
 ```
@@ -594,4 +599,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.7 — updated to reflect Epic 3.1 semantic segmentation. Phase 1, Phase 2, and Epic 3.1 implementations are in review.*
+*Document version 0.8 — updated to reflect Epic 3.2/3.3 vectorization, DXF generation, and completed-job downloads. Phase 1, Phase 2, and Phase 3 implementations are in review.*
