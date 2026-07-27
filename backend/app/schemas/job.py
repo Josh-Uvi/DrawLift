@@ -1,7 +1,7 @@
 """Pydantic request/response models for the Job API."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,6 +14,7 @@ class JobConfig(BaseModel):
     dpi: int = Field(default=300, ge=72, le=1200)
     floor_height_m: float = Field(default=3.0, ge=0.5, le=10.0)
     output_format: Literal["dxf", "dwg"] = "dxf"
+    segmenter: Literal["ml", "classic"] = "classic"
 
 
 class JobCreateResponse(BaseModel):
@@ -29,7 +30,7 @@ class JobStatus(BaseModel):
     status: Literal["pending", "queued", "processing", "completed", "failed"]
     progress: int
     step: str | None = None
-    config: dict
+    config: dict[str, Any]
     input_file: str
     output_file: str | None = None
     page_count: int | None = None

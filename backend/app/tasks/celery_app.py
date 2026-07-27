@@ -1,8 +1,10 @@
 """Celery application instance with Redis broker and result backend."""
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 from app.core.config import get_settings
+from app.pipeline.steps.segmenter import preload_configured_segmentation_model
 
 settings = get_settings()
 
@@ -23,3 +25,9 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(["app.tasks"])
+
+
+@worker_process_init.connect
+def preload_worker_models(**_: object) -> None:
+    """Load configured ML models once per worker process."""
+    preload_configured_segmentation_model()

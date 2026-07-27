@@ -35,11 +35,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://aifc:aifc@postgres:5432/aifc
       REDIS_URL: redis://redis:6379/0
       STORAGE_PATH: /app/storage
+      MODELS_PATH: /app/models
       CORS_ORIGINS: '["http://localhost:3000"]'
       DEBUG: "true"
     volumes:
       - ./backend:/app
       - storage_data:/app/storage
+      - models_data:/app/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,9 +55,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://aifc:aifc@postgres:5432/aifc
       REDIS_URL: redis://redis:6379/0
       STORAGE_PATH: /app/storage
+      MODELS_PATH: /app/models
     volumes:
       - ./backend:/app
       - storage_data:/app/storage
+      - models_data:/app/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,3 +80,4 @@ volumes:
   postgres_data:
   redis_data:
   storage_data:
+  models_data:

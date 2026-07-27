@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Storage
     STORAGE_PATH: str = "./storage"
 
+    # ML models
+    MODELS_PATH: str = "./models"
+    SEGMENTER_MODEL_PATH: str | None = None
+    SEGMENTER_MODEL_URL: str | None = None
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 

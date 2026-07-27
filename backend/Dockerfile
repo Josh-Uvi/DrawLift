@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create storage directory
-RUN mkdir -p /app/storage
+# Create runtime artifact directories
+RUN mkdir -p /app/storage /app/models
 
 EXPOSE 8000
 
