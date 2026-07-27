@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running, and Phase 2 pipeline infrastructure plus PyMuPDF page extraction are in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running, and Phase 2 pipeline infrastructure, PyMuPDF page extraction, and OpenCV preprocessing are in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -275,6 +275,7 @@ Implemented foundation:
 - `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
 - `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
 - `backend/app/pipeline/steps/pdf_parser.py` implements PyMuPDF-backed PDF page extraction.
+- `backend/app/pipeline/steps/preprocessor.py` implements OpenCV grayscale, Gaussian blur, adaptive threshold, and deskew processing.
 - `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
 - `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
 
@@ -319,7 +320,7 @@ The pipeline is a composed chain of steps. Each step is a pure function of the c
 ```python
 result = Pipeline([
     PdfParserStep(),
-    OpenCVPreprocessor(denoise_strength=7),
+    OpenCVPreprocessor(gaussian_kernel=(7, 7)),
     YOLOSegmenter(model="floorplan-v1", device="cpu"),
     ContourVectorizer(simplify_tolerance=2.0),
     WallExtruder(default_height_m=3.0),     # only in 3D mode
@@ -357,7 +358,7 @@ result = Pipeline([
 - [x] Pluggable backend pipeline framework (`PipelineContext`, `PipelineStep`, `Pipeline.run()`)
 - [x] Redis Pub/Sub progress publisher for pipeline steps
 - [x] PyMuPDF integration → extract pages as configurable-DPI PNG images
-- OpenCV preprocessing pipeline
+- [x] OpenCV preprocessing pipeline (grayscale, Gaussian blur, adaptive threshold, deskew)
 - Page preview in frontend
 
 ### Phase 3 — 2D Vectorization (core value)
@@ -400,9 +401,11 @@ pytest==8.*              # testing
 pytest-asyncio==0.24.*
 httpx==0.28.*            # test client
 
-# Planned for Phase 2+ (not yet installed)
-# opencv-python-headless    # image preprocessing
-# numpy
+# Phase 2 image preprocessing
+opencv-python-headless==4.*
+numpy==2.*
+
+# Planned for Phase 3+ (not yet installed)
 # ezdxf                     # DXF generation (reliable, open)
 # libredwg (system-level)   # optional DWG support
 # onnxruntime               # production inference
@@ -593,4 +596,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.4 — updated to reflect Phase 1 implementation and Phase 2 pipeline infrastructure plus PyMuPDF page extraction.*
+*Document version 0.5 — updated to reflect Phase 1 implementation and Phase 2 pipeline infrastructure, PyMuPDF page extraction, and OpenCV preprocessing.*
