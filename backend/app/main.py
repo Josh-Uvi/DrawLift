@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
+from app.api.v1.jobs_pages import router as jobs_pages_router
 from app.api.v1.jobs_stream import router as jobs_stream_router
 from app.core.config import get_settings
 
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     api_prefix = settings.API_V1_PREFIX
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
     app.include_router(jobs_router, prefix=api_prefix, tags=["jobs"])
+    app.include_router(jobs_pages_router, prefix=api_prefix, tags=["jobs"])
     app.include_router(jobs_stream_router, prefix=api_prefix, tags=["jobs"])
 
     return app
