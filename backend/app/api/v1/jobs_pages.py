@@ -55,10 +55,20 @@ async def get_job_page(
     # Construct and validate the expected page image path
     # PdfParserStep stores pages at: {storage_path}/{job_id}/pages/page_{n:04d}.png
     storage_base = Path(settings.STORAGE_PATH).resolve()
-    job_pages_dir = (storage_base / job_id_str / "pages").resolve()
+    job_storage_dir = Path(job.storage_path).resolve()
 
     try:
-        job_pages_dir.relative_to(storage_base)
+        job_storage_dir.relative_to(storage_base)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid job path",
+        )
+
+    job_pages_dir = (job_storage_dir / "pages").resolve()
+
+    try:
+        job_pages_dir.relative_to(job_storage_dir)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
