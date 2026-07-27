@@ -2,7 +2,7 @@
 
 A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
 
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) is complete and running, and Phase 2 pipeline infrastructure, PyMuPDF page extraction, and OpenCV preprocessing are in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
+> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow) and Phase 2 (PDF parsing, preprocessing, page preview) are complete and in review. All 5 Docker services (frontend, backend, worker, postgres, redis) are operational. See the phased roadmap at the bottom for what's next.
 >
 > 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 92 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
 
@@ -114,7 +114,9 @@ frontend/src/
 │   │   ├── DropZone.tsx          # Drag & drop (react-dropzone)
 │   │   └── ConversionOptions.tsx # 2D/3D toggle, DPI, floor height, format
 │   ├── job/
-│   │   └── ProgressTracker.tsx   # Stepper: Uploaded → Processing → Completed
+│   │   ├── ProgressTracker.tsx   # Stepper: Uploaded → Processing → Completed
+│   │   ├── PageViewer.tsx        # Horizontal strip of page thumbnails
+│   │   └── ImageModal.tsx        # Click-to-enlarge modal for page preview
 │   └── shared/
 │       ├── Button.tsx
 │       └── Card.tsx
@@ -359,7 +361,7 @@ result = Pipeline([
 - [x] Redis Pub/Sub progress publisher for pipeline steps
 - [x] PyMuPDF integration → extract pages as configurable-DPI PNG images
 - [x] OpenCV preprocessing pipeline (grayscale, Gaussian blur, adaptive threshold, deskew)
-- Page preview in frontend
+- [x] Page preview in frontend (horizontal thumbnail strip with click-to-enlarge modal)
 
 ### Phase 3 — 2D Vectorization (core value)
 - Integrate pre-trained floor plan segmentation model (e.g. fine-tuned on CubiCasa5K)
@@ -596,4 +598,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-*Document version 0.5 — updated to reflect Phase 1 implementation and Phase 2 pipeline infrastructure, PyMuPDF page extraction, and OpenCV preprocessing.*
+*Document version 0.6 — updated to reflect Phase 2 complete with page preview. Phase 1 and Phase 2 implementations are in review.*

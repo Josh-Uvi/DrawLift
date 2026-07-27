@@ -12,5 +12,9 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: 420a5bb16709bc984a128ca142ede5b5f2a1ac311d2c465912ab6bf99a39b3b4
 - filename: TODO.md
-  checksum: 05dfca772a10705abbdd91b62efee283906f5255f6331149559be13b8610b014
+  checksum: 4509e98ac1e6a8fa42271539f033e19cfec37cd0b761664b7c6168b7e7cebd9e
+- filename: frontend/src/components/job/PageViewer.tsx
+  checksum: 161987d127228af51e82420c88594a54b972c9c7ae6814a36263804cfebc8a31
+- filename: frontend/src/components/job/ImageModal.tsx
+  checksum: c32c61f27917ececc5afe2ff60f61881ab0ec0f4cb11383a1066642f34b0d345
 version: "1.0"

@@ -57,6 +57,7 @@
 | 2026-07-23 | Stage 2 — US-012 | Not opened | US-012 | Pipeline framework, context dataclass, ordered orchestrator, and Redis Pub/Sub progress publisher prepared on `feat/us-012-pipeline-infrastructure`. |
 | 2026-07-23 | Stage 2 — US-013 | Not opened | US-013 | PyMuPDF parser step extracts PDF pages to configurable-DPI PNG images and reports the 20% pipeline milestone on `feat/us-013-pdf-page-extraction`. |
 | 2026-07-23 | Stage 2 — US-014 | Not opened | US-014 | OpenCV preprocessing converts pages to grayscale binary arrays, applies blur and adaptive thresholding, corrects skew, and reports the 35% milestone on `feature/US-014-opencv-preprocessing`. |
+| 2026-07-27 | Stage 2 — US-015 | Not opened | US-015 | Page thumbnail preview: backend endpoint (`GET /jobs/{id}/pages/{n}`), PageViewer horizontal thumbnail strip, and click-to-enlarge modal on the job detail page on `feature/US-015-page-thumbnails`. |
 
 ---
 
@@ -275,16 +276,16 @@
 ## Epic 2.2 — Frontend Preview
 
 ### US-015 · As a user, I want to see extracted page thumbnails on the job page
-- **Priority:** P1 · **Effort:** S · **Status:** ⬜ Backlog · **Labels:** `area:frontend`, `epic:p2-pdf`
+- **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:frontend`, `epic:p2-pdf`
 - **Acceptance Criteria:**
-  - [ ] `/jobs/{id}/pages/{n}` endpoint serves extracted page images
-  - [ ] Job detail page shows a horizontal strip of page thumbnails
-  - [ ] Click thumbnail to enlarge in modal
+  - [x] `/jobs/{id}/pages/{n}` endpoint serves extracted page images
+  - [x] Job detail page shows a horizontal strip of page thumbnails
+  - [x] Click thumbnail to enlarge in modal
 - **Tasks:**
-  - [ ] T-048 — Add `GET /api/v1/jobs/{id}/pages/{n}` endpoint
-  - [ ] T-049 — Create `components/job/PageViewer.tsx`
-  - [ ] T-050 — Integrate `PageViewer` into `app/jobs/[id]/page.tsx`
-  - [ ] T-051 — Add image modal component
+  - [x] T-048 — Add `GET /api/v1/jobs/{id}/pages/{n}` endpoint
+  - [x] T-049 — Create `components/job/PageViewer.tsx`
+  - [x] T-050 — Integrate `PageViewer` into `app/jobs/[id]/page.tsx`
+  - [x] T-051 — Add image modal component
 
 ---
 
@@ -739,4 +740,4 @@ Stage 5 (Polish)                      ▼
 
 ---
 
-*Document version 0.5 — updated 2026-07-23 to reflect Phase 1 implementation and US-012 → US-014 pipeline progress. US-001 ✅ Done; US-002 → US-014 👀 In Review.*
+*Document version 0.6 — updated 2026-07-27 to reflect US-015 page thumbnail preview. US-001 ✅ Done; US-002 → US-015 👀 In Review.*
