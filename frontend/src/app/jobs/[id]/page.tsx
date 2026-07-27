@@ -7,6 +7,7 @@ import Card from "@/components/shared/Card";
 import ProgressTracker from "@/components/job/ProgressTracker";
 import PageViewer from "@/components/job/PageViewer";
 import DownloadButton from "@/components/job/DownloadButton";
+import RetryButton from "@/components/job/RetryButton";
 import { getJob } from "@/lib/api";
 import type { Job } from "@/types/api";
 
@@ -37,6 +38,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         <Link href="/" className="text-sm text-primary hover:underline">
           ← Back to upload
         </Link>
+        <Link href="/history" className="ml-4 text-sm text-primary hover:underline">
+          View history
+        </Link>
       </div>
 
       <Card title={`Job ${id}`}>
@@ -61,11 +65,23 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <Model3DPreview jobId={id} />
           </div>
         )}
+        {job && job.status === "failed" && (
+          <div className="mt-6 space-y-3 rounded-lg border border-red-200 bg-red-50 p-4">
+            <div>
+              <h2 className="text-sm font-semibold text-red-900">Conversion failed</h2>
+              <p className="mt-1 text-sm text-red-700">
+                {job.error_msg || "The worker could not complete this conversion."}
+              </p>
+            </div>
+            <RetryButton jobId={id} onRetried={refreshJob} />
+          </div>
+        )}
         <div className="mt-6">
           <DownloadButton
             jobId={id}
             isReady={job?.status === "completed"}
             is3D={job?.config?.mode === "3d"}
+            outputFormat={job?.config?.output_format}
           />
         </div>
       </Card>

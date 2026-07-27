@@ -114,15 +114,20 @@ export default function ConversionOptions({
         <select
           value={config.output_format}
           onChange={(e) =>
-            onChange({ ...config, output_format: e.target.value as "dxf" | "dwg" | "glb" })
+            onChange({ ...config, output_format: e.target.value as "dxf" | "dwg" | "both" })
           }
           disabled={disabled}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
           <option value="dxf">DXF</option>
           <option value="dwg">DWG</option>
-          {config.mode === "3d" && <option value="glb">GLB (3D model)</option>}
+          <option value="both">DXF + DWG</option>
         </select>
+        {config.mode === "3d" && (
+          <p className="mt-1 text-xs text-gray-500">
+            3D jobs always include a GLB preview/download in addition to CAD output.
+          </p>
+        )}
       </div>
 
       <div>
