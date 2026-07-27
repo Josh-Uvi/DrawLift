@@ -5,14 +5,19 @@ from app.pipeline.orchestrator import Pipeline, create_pipeline
 from app.pipeline.primitives import (
     OpeningPrimitive,
     Point,
+    Point3D,
     Primitive,
     RoomPrimitive,
+    SlabGenerator,
+    SlabPrimitive,
     TextPrimitive,
     WallPrimitive,
+    WallSolidPrimitive,
 )
 from app.pipeline.progress import ProgressEvent, RedisProgressPublisher, get_progress_publisher
 from app.pipeline.steps.base import PipelineStep
 from app.pipeline.steps.dxf_writer import DxfWriterStep
+from app.pipeline.steps.extruder import WallExtruderStep
 from app.pipeline.steps.pdf_parser import PdfParserStep
 from app.pipeline.steps.preprocessor import OpenCVPreprocessor
 from app.pipeline.steps.segmenter import (
@@ -38,11 +43,16 @@ __all__ = [
     "ProgressEvent",
     "ProgressPublisher",
     "RedisProgressPublisher",
+    "Point3D",
     "RoomPrimitive",
     "SegmenterStep",
+    "SlabGenerator",
+    "SlabPrimitive",
     "TextPrimitive",
     "VectorizerStep",
+    "WallExtruderStep",
     "WallPrimitive",
+    "WallSolidPrimitive",
     "create_pipeline",
     "get_progress_publisher",
     "preload_configured_segmentation_model",
