@@ -163,6 +163,7 @@ backend/app/**/*.pyc
 
 # Logs
 logs/
+.make/
 *.log
 npm-debug.log*
 yarn-debug.log*
