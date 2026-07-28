@@ -271,6 +271,7 @@ ai-file-converter/
 │
 ├── scripts/                        # GitHub bootstrap & issue creation
 ├── docker-compose.yml              # Orchestrates app services plus optional DWG converter profile
+├── Makefile                        # One-command Docker and local service management
 ├── .env.example                    # Environment variables template
 ├── .pre-commit-config.yaml         # Local lint/format/type-check hooks
 ├── .talismanrc                     # Pre-push hook config
@@ -481,21 +482,104 @@ numpy==2.*
 
 ## 12. Local Development (Quick Start)
 
-The application is fully runnable via Docker Compose:
+The root `Makefile` is the preferred entrypoint for starting and stopping the
+stack. It supports both Docker Compose and non-Docker local development, and it
+auto-detects either `docker compose` or the legacy `docker-compose` binary.
 
 ```bash
 # 1. Clone & configure
 cp .env.example .env
 
-# 2. Boot default services (frontend, backend, worker, beat, postgres, redis)
-docker compose up -d --build
+# 2A. Boot everything with Docker
+make docker-up
+make docker-migrate
 
-# 3. Run DB migrations
-docker compose exec backend alembic upgrade head
+# 2B. Or boot everything without Docker
+# Uses Homebrew services for PostgreSQL/Redis by default and PID-managed app processes.
+make local-up
 
-# 4. Open the app
+# 3. Open the app
 open http://localhost:3000      # Frontend (Next.js)
 open http://localhost:8000/api/v1/health  # Backend health check
+```
+
+### Make service management
+
+Run `make help` to list all available targets. Common all-service commands are:
+
+| Command             | Description                                                                 |
+| ------------------- | --------------------------------------------------------------------------- |
+| `make docker-up`    | Build and start frontend, backend, worker, beat, PostgreSQL, and Redis.     |
+| `make docker-down`  | Stop and remove the Docker Compose stack.                                   |
+| `make docker-up-dwg`| Start the Docker stack plus the optional DWG converter profile.             |
+| `make local-up`     | Start all services without Docker (`brew` infra + local app processes).     |
+| `make local-down`   | Stop all local processes and Homebrew-managed PostgreSQL/Redis services.    |
+| `make up`           | Alias for `make local-up`.                                                  |
+| `make down`         | Alias for `make local-down`.                                                |
+
+Service-specific Docker targets are available for each Compose service:
+
+```bash
+make docker-up-postgres
+make docker-up-redis
+make docker-up-backend
+make docker-up-worker
+make docker-up-beat
+make docker-up-frontend
+
+make docker-stop-backend
+make docker-stop-frontend
+make docker-stop-service SERVICE=redis
+```
+
+Service-specific non-Docker targets run the app services in the background and
+write PID/log files under `.make/` (ignored by Git):
+
+```bash
+make local-up-postgres       # Homebrew service by default
+make local-db-setup          # Create the local aifc role/database if missing
+make local-up-redis          # Homebrew service by default
+make local-up-backend        # FastAPI via backend/.venv
+make local-up-worker         # Celery worker via backend/.venv
+make local-up-beat           # Celery Beat via backend/.venv
+make local-up-frontend       # Next.js dev server
+
+make local-down-backend
+make local-down-worker
+make local-down-beat
+make local-down-frontend
+make local-status
+make logs-backend
+```
+
+The non-Docker workflow expects backend dependencies in `backend/.venv` and
+frontend dependencies in `frontend/node_modules`:
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cd ../frontend
+npm install
+```
+
+By default, `make local-up` starts PostgreSQL and Redis via Homebrew services
+(`postgresql@16` and `redis`) and creates the expected `aifc` role/database if
+they are missing. If those services are managed separately, start them yourself
+and run:
+
+```bash
+make local-up LOCAL_INFRA=external
+```
+
+Useful overrides:
+
+```bash
+make docker-up COMPOSE=docker-compose
+make local-up BREW_POSTGRES_SERVICE=postgresql@15
+make local-up LOCAL_BACKEND_PORT=8010 LOCAL_FRONTEND_PORT=3010
 ```
 
 ### Services
@@ -517,28 +601,10 @@ Install libredwg's `dwgwrite`, mount ODA FileConverter in a sidecar/shared volum
 or set an explicit command template:
 
 ```bash
-DWG_CONVERTER_COMMAND='dwgwrite {input} {output}' docker compose up -d --build
+DWG_CONVERTER_COMMAND='dwgwrite {input} {output}' make docker-up
 ```
 
 Supported placeholders are `{input}`, `{output}`, `{input_dir}`, `{output_dir}`, and `{stem}`.
-
-### Development without Docker
-
-**Backend:**
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-**Frontend:**
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
 
 ### Linting & Tests
 
@@ -663,4 +729,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-_Document version 1.0 — updated to reflect Phase 5 production polish: DWG conversion command integration, DXF/DWG/both selection, history and delete UI, failed-job retry, stored stack traces, daily cleanup, and archived jobs. Phases 1–5 implementations are in review._
+_Document version 1.0 — updated to reflect Phase 5 production polish and root Makefile service management: DWG conversion command integration, DXF/DWG/both selection, history and delete UI, failed-job retry, stored stack traces, daily cleanup, archived jobs, and one-command Docker/local startup and shutdown._
