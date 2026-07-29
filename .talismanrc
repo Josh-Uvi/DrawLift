@@ -29,4 +29,6 @@ fileignoreconfig:
   checksum: 2962c6ac1f8fd80de3734e1998bea00860455a099cba242d227d78378e538c7b
 - filename: frontend/src/components/history/JobTable.tsx
   checksum: ea9ed540884f893a02d0efd11f9787cece503ad543a09724f9c67b17c3817ed0
+- filename: backend/tests/test_placeholder_task_paths.py
+  checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
 version: "1.0"

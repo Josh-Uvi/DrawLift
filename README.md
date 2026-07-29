@@ -271,6 +271,7 @@ ai-file-converter/
 │
 ├── scripts/                        # GitHub bootstrap & issue creation
 ├── docker-compose.yml              # Orchestrates app services plus optional DWG converter profile
+├── Makefile                        # One-command Docker and local service management
 ├── .env.example                    # Environment variables template
 ├── .pre-commit-config.yaml         # Local lint/format/type-check hooks
 ├── .talismanrc                     # Pre-push hook config
@@ -481,21 +482,106 @@ numpy==2.*
 
 ## 12. Local Development (Quick Start)
 
-The application is fully runnable via Docker Compose:
+The root `Makefile` is the preferred entrypoint for starting and stopping the
+stack. It supports both all-Docker workflows and a hybrid local development
+workflow where FastAPI/Next.js run on your machine while PostgreSQL, Redis, and
+the Celery worker run in Docker. It auto-detects either `docker compose` or the
+legacy `docker-compose` binary.
 
 ```bash
 # 1. Clone & configure
 cp .env.example .env
 
-# 2. Boot default services (frontend, backend, worker, beat, postgres, redis)
-docker compose up -d --build
+# 2A. Boot everything with Docker (local test or production-like)
+make docker-up
+make docker-migrate
 
-# 3. Run DB migrations
-docker compose exec backend alembic upgrade head
+# 2B. Or use hybrid local development
+# Runs frontend/backend on the host and postgres/redis/worker in Docker.
+make local-up
 
-# 4. Open the app
+# 3. Open the app
 open http://localhost:3000      # Frontend (Next.js)
 open http://localhost:8000/api/v1/health  # Backend health check
+```
+
+### Make service management
+
+Run `make help` to list all available targets. Common all-service commands are:
+
+| Command              | Description                                                                    |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `make docker-up`     | Build and start frontend, backend, worker, beat, PostgreSQL, and Redis.        |
+| `make docker-up-dev` | Alias for all-Docker local development/test startup.                           |
+| `make docker-up-prod`| Alias for all-Docker production-like startup.                                  |
+| `make docker-down`   | Stop and remove the Docker Compose stack.                                      |
+| `make docker-up-dwg` | Start the Docker stack plus the optional DWG converter profile.                |
+| `make local-up`      | Start hybrid local dev: host frontend/backend + Docker postgres/redis/worker. |
+| `make local-down`    | Stop hybrid local dev services.                                                |
+| `make up`            | Alias for `make local-up`.                                                     |
+| `make down`          | Alias for `make local-down`.                                                   |
+
+Service-specific Docker targets are available for each Compose service:
+
+```bash
+make docker-up-postgres
+make docker-up-redis
+make docker-up-backend
+make docker-up-worker
+make docker-up-beat
+make docker-up-frontend
+
+make docker-stop-backend
+make docker-stop-frontend
+make docker-stop-service SERVICE=redis
+```
+
+Hybrid local development keeps source hot-reload fast by running the app servers
+on your machine, while infrastructure and the conversion worker remain in Docker:
+
+```bash
+make local-up-postgres       # Docker PostgreSQL
+make local-up-redis          # Docker Redis
+make local-up-worker         # Docker Celery worker
+make local-up-backend        # Host FastAPI via backend/.venv
+make local-up-frontend       # Host Next.js dev server
+make local-up-beat           # Optional Docker Celery Beat cleanup scheduler
+
+make local-down-backend
+make local-down-worker
+make local-down-beat
+make local-down-frontend
+make local-status
+make logs-backend
+make logs-worker
+```
+
+The hybrid workflow expects backend dependencies in `backend/.venv` and frontend
+dependencies in `frontend/node_modules`:
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cd ../frontend
+npm install
+```
+
+`make local-up` bind-mounts `./backend/storage` and `./backend/models` into the
+Docker worker so files written by the host FastAPI process are visible to the
+worker. The hybrid worker uses relative `STORAGE_PATH=storage` /
+`MODELS_PATH=models` inside the backend container so completed job paths remain
+portable back to the host API. Override the bind-mounted host paths if needed
+with `LOCAL_STORAGE_DIR` or `LOCAL_MODELS_DIR`.
+
+Useful overrides:
+
+```bash
+make docker-up COMPOSE=docker-compose
+make local-up LOCAL_STORAGE_DIR=./storage LOCAL_MODELS_DIR=./models
+make local-up LOCAL_BACKEND_PORT=8010 LOCAL_FRONTEND_PORT=3010
 ```
 
 ### Services
@@ -517,28 +603,10 @@ Install libredwg's `dwgwrite`, mount ODA FileConverter in a sidecar/shared volum
 or set an explicit command template:
 
 ```bash
-DWG_CONVERTER_COMMAND='dwgwrite {input} {output}' docker compose up -d --build
+DWG_CONVERTER_COMMAND='dwgwrite {input} {output}' make docker-up
 ```
 
 Supported placeholders are `{input}`, `{output}`, `{input_dir}`, `{output_dir}`, and `{stem}`.
-
-### Development without Docker
-
-**Backend:**
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-**Frontend:**
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
 
 ### Linting & Tests
 
@@ -663,4 +731,4 @@ See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, incl
 
 ---
 
-_Document version 1.0 — updated to reflect Phase 5 production polish: DWG conversion command integration, DXF/DWG/both selection, history and delete UI, failed-job retry, stored stack traces, daily cleanup, and archived jobs. Phases 1–5 implementations are in review._
+_Document version 1.0 — updated to reflect Phase 5 production polish and root Makefile service management: DWG conversion command integration, DXF/DWG/both selection, history and delete UI, failed-job retry, stored stack traces, daily cleanup, archived jobs, and one-command Docker/local startup and shutdown._

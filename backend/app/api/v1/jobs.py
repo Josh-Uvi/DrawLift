@@ -1,8 +1,9 @@
 """Job API endpoints: POST /jobs, GET /jobs/{id}, GET /jobs."""
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from fastapi import (
@@ -232,7 +233,10 @@ async def retry_job(
     job.output_file = None
     await db.flush()
 
-    process_job.delay(str(job.id), dict(job.config))
+    stored_config = cast(Mapping[str, Any], getattr(job, "config"))
+    retry_config: dict[str, Any] = dict(stored_config)
+    JobConfig.model_validate(retry_config)
+    process_job.delay(str(job.id), retry_config)
     return JobCreateResponse(job_id=str(job.id))
 
 
