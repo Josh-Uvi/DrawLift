@@ -483,19 +483,21 @@ numpy==2.*
 ## 12. Local Development (Quick Start)
 
 The root `Makefile` is the preferred entrypoint for starting and stopping the
-stack. It supports both Docker Compose and non-Docker local development, and it
-auto-detects either `docker compose` or the legacy `docker-compose` binary.
+stack. It supports both all-Docker workflows and a hybrid local development
+workflow where FastAPI/Next.js run on your machine while PostgreSQL, Redis, and
+the Celery worker run in Docker. It auto-detects either `docker compose` or the
+legacy `docker-compose` binary.
 
 ```bash
 # 1. Clone & configure
 cp .env.example .env
 
-# 2A. Boot everything with Docker
+# 2A. Boot everything with Docker (local test or production-like)
 make docker-up
 make docker-migrate
 
-# 2B. Or boot everything without Docker
-# Uses Homebrew services for PostgreSQL/Redis by default and PID-managed app processes.
+# 2B. Or use hybrid local development
+# Runs frontend/backend on the host and postgres/redis/worker in Docker.
 make local-up
 
 # 3. Open the app
@@ -507,15 +509,17 @@ open http://localhost:8000/api/v1/health  # Backend health check
 
 Run `make help` to list all available targets. Common all-service commands are:
 
-| Command             | Description                                                                 |
-| ------------------- | --------------------------------------------------------------------------- |
-| `make docker-up`    | Build and start frontend, backend, worker, beat, PostgreSQL, and Redis.     |
-| `make docker-down`  | Stop and remove the Docker Compose stack.                                   |
-| `make docker-up-dwg`| Start the Docker stack plus the optional DWG converter profile.             |
-| `make local-up`     | Start all services without Docker (`brew` infra + local app processes).     |
-| `make local-down`   | Stop all local processes and Homebrew-managed PostgreSQL/Redis services.    |
-| `make up`           | Alias for `make local-up`.                                                  |
-| `make down`         | Alias for `make local-down`.                                                |
+| Command              | Description                                                                    |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `make docker-up`     | Build and start frontend, backend, worker, beat, PostgreSQL, and Redis.        |
+| `make docker-up-dev` | Alias for all-Docker local development/test startup.                           |
+| `make docker-up-prod`| Alias for all-Docker production-like startup.                                  |
+| `make docker-down`   | Stop and remove the Docker Compose stack.                                      |
+| `make docker-up-dwg` | Start the Docker stack plus the optional DWG converter profile.                |
+| `make local-up`      | Start hybrid local dev: host frontend/backend + Docker postgres/redis/worker. |
+| `make local-down`    | Stop hybrid local dev services.                                                |
+| `make up`            | Alias for `make local-up`.                                                     |
+| `make down`          | Alias for `make local-down`.                                                   |
 
 Service-specific Docker targets are available for each Compose service:
 
@@ -532,17 +536,16 @@ make docker-stop-frontend
 make docker-stop-service SERVICE=redis
 ```
 
-Service-specific non-Docker targets run the app services in the background and
-write PID/log files under `.make/` (ignored by Git):
+Hybrid local development keeps source hot-reload fast by running the app servers
+on your machine, while infrastructure and the conversion worker remain in Docker:
 
 ```bash
-make local-up-postgres       # Homebrew service by default
-make local-db-setup          # Create the local aifc role/database if missing
-make local-up-redis          # Homebrew service by default
-make local-up-backend        # FastAPI via backend/.venv
-make local-up-worker         # Celery worker via backend/.venv
-make local-up-beat           # Celery Beat via backend/.venv
-make local-up-frontend       # Next.js dev server
+make local-up-postgres       # Docker PostgreSQL
+make local-up-redis          # Docker Redis
+make local-up-worker         # Docker Celery worker
+make local-up-backend        # Host FastAPI via backend/.venv
+make local-up-frontend       # Host Next.js dev server
+make local-up-beat           # Optional Docker Celery Beat cleanup scheduler
 
 make local-down-backend
 make local-down-worker
@@ -550,10 +553,11 @@ make local-down-beat
 make local-down-frontend
 make local-status
 make logs-backend
+make logs-worker
 ```
 
-The non-Docker workflow expects backend dependencies in `backend/.venv` and
-frontend dependencies in `frontend/node_modules`:
+The hybrid workflow expects backend dependencies in `backend/.venv` and frontend
+dependencies in `frontend/node_modules`:
 
 ```bash
 cd backend
@@ -565,20 +569,18 @@ cd ../frontend
 npm install
 ```
 
-By default, `make local-up` starts PostgreSQL and Redis via Homebrew services
-(`postgresql@16` and `redis`) and creates the expected `aifc` role/database if
-they are missing. If those services are managed separately, start them yourself
-and run:
-
-```bash
-make local-up LOCAL_INFRA=external
-```
+`make local-up` bind-mounts `./backend/storage` and `./backend/models` into the
+Docker worker so files written by the host FastAPI process are visible to the
+worker. The hybrid worker uses relative `STORAGE_PATH=storage` /
+`MODELS_PATH=models` inside the backend container so completed job paths remain
+portable back to the host API. Override the bind-mounted host paths if needed
+with `LOCAL_STORAGE_DIR` or `LOCAL_MODELS_DIR`.
 
 Useful overrides:
 
 ```bash
 make docker-up COMPOSE=docker-compose
-make local-up BREW_POSTGRES_SERVICE=postgresql@15
+make local-up LOCAL_STORAGE_DIR=./storage LOCAL_MODELS_DIR=./models
 make local-up LOCAL_BACKEND_PORT=8010 LOCAL_FRONTEND_PORT=3010
 ```
 

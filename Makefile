@@ -16,20 +16,14 @@ LOCAL_BACKEND_PORT ?= 8000
 LOCAL_FRONTEND_HOST ?= 0.0.0.0
 LOCAL_FRONTEND_PORT ?= 3000
 LOCAL_WAIT_SECONDS ?= 30
-CELERY_LOG_LEVEL ?= info
 
-# Local infrastructure defaults to Homebrew services on macOS.
-# Use LOCAL_INFRA=external when PostgreSQL/Redis are managed outside Make.
-LOCAL_INFRA ?= brew
-BREW_POSTGRES_SERVICE ?= postgresql@16
-BREW_REDIS_SERVICE ?= redis
-LOCAL_DB_NAME ?= aifc
-LOCAL_DB_USER ?= aifc
-LOCAL_DB_PASSWORD ?= aifc
-POSTGRES_HOST ?= localhost
-POSTGRES_PORT ?= 5432
-REDIS_HOST ?= localhost
-REDIS_PORT ?= 6379
+# Hybrid local development runs frontend/backend on the host, while PostgreSQL,
+# Redis, worker, and optional Beat run in Docker. The host backend and Docker
+# worker must share storage/model directories so queued jobs can read the same
+# files regardless of which process created them.
+LOCAL_STORAGE_DIR ?= ./backend/storage
+LOCAL_MODELS_DIR ?= ./backend/models
+LOCAL_DOCKER_ENV := STORAGE_VOLUME=$(LOCAL_STORAGE_DIR) MODELS_VOLUME=$(LOCAL_MODELS_DIR) STORAGE_PATH=storage MODELS_PATH=models
 
 .PHONY: help
 help: ## Show available Make targets
@@ -37,31 +31,33 @@ help: ## Show available Make targets
 	@printf "\nSpecific Docker service targets:\n"
 	@printf "  \033[36m%-28s\033[0m %s\n" "docker-up-postgres" "Start PostgreSQL with Docker" "docker-up-redis" "Start Redis with Docker" "docker-up-backend" "Start FastAPI with Docker" "docker-up-worker" "Start Celery worker with Docker" "docker-up-beat" "Start Celery Beat with Docker" "docker-up-frontend" "Start Next.js with Docker"
 	@printf "  \033[36m%-28s\033[0m %s\n" "docker-stop-postgres" "Stop PostgreSQL Docker service" "docker-stop-redis" "Stop Redis Docker service" "docker-stop-backend" "Stop FastAPI Docker service" "docker-stop-worker" "Stop Celery worker Docker service" "docker-stop-beat" "Stop Celery Beat Docker service" "docker-stop-frontend" "Stop Next.js Docker service"
-	@printf "\nCommon variables:\n  COMPOSE=%s\n  LOCAL_INFRA=%s (brew|external)\n  BACKEND_VENV=%s\n\n" "$(COMPOSE)" "$(LOCAL_INFRA)" "$(BACKEND_VENV)"
+	@printf "\nHybrid local development:\n"
+	@printf "  \033[36m%-28s\033[0m %s\n" "local-up" "Host frontend/backend + Docker postgres/redis/worker" "local-down" "Stop host frontend/backend + Docker local services" "local-up-beat" "Optionally start cleanup scheduler in Docker"
+	@printf "\nCommon variables:\n  COMPOSE=%s\n  BACKEND_VENV=%s\n  LOCAL_STORAGE_DIR=%s\n  LOCAL_MODELS_DIR=%s\n\n" "$(COMPOSE)" "$(BACKEND_VENV)" "$(LOCAL_STORAGE_DIR)" "$(LOCAL_MODELS_DIR)"
 
-define start_local_service
+define start_host_service
 	@mkdir -p "$(PID_DIR)" "$(LOG_DIR)"
 	@if [ -f "$(PID_DIR)/$(1).pid" ] && kill -0 "$$(cat "$(PID_DIR)/$(1).pid")" 2>/dev/null; then \
-		echo "$(1) already running (pid $$(cat "$(PID_DIR)/$(1).pid"))"; \
+		echo "$(1) already running on the host (pid $$(cat "$(PID_DIR)/$(1).pid"))"; \
 	else \
-		echo "Starting $(1)..."; \
+		echo "Starting $(1) on the host..."; \
 		nohup $(SHELL) -lc '$(2)' > "$(LOG_DIR)/$(1).log" 2>&1 & echo $$! > "$(PID_DIR)/$(1).pid"; \
 		echo "$(1) started (pid $$(cat "$(PID_DIR)/$(1).pid"), log $(LOG_DIR)/$(1).log)"; \
 	fi
 endef
 
-define stop_local_service
+define stop_host_service
 	@if [ -f "$(PID_DIR)/$(1).pid" ]; then \
 		PID="$$(cat "$(PID_DIR)/$(1).pid")"; \
 		if kill -0 "$$PID" 2>/dev/null; then \
-			echo "Stopping $(1) (pid $$PID)..."; \
+			echo "Stopping host $(1) (pid $$PID)..."; \
 			kill "$$PID" 2>/dev/null || true; \
 			for _ in $$(seq 1 10); do \
 				kill -0 "$$PID" 2>/dev/null || break; \
 				sleep 1; \
 			done; \
 			if kill -0 "$$PID" 2>/dev/null; then \
-				echo "Force stopping $(1) (pid $$PID)..."; \
+				echo "Force stopping host $(1) (pid $$PID)..."; \
 				kill -9 "$$PID" 2>/dev/null || true; \
 			fi; \
 		else \
@@ -69,7 +65,7 @@ define stop_local_service
 		fi; \
 		rm -f "$(PID_DIR)/$(1).pid"; \
 	else \
-		echo "$(1) is not running"; \
+		echo "host $(1) is not running"; \
 	fi
 endef
 
@@ -93,16 +89,9 @@ check-compose:
 		exit 1; \
 	fi
 
-.PHONY: check-brew
-check-brew:
-	@if [ "$(LOCAL_INFRA)" = "brew" ] && ! command -v brew >/dev/null 2>&1; then \
-		echo "Homebrew is required for LOCAL_INFRA=brew. Install brew or run with LOCAL_INFRA=external after starting PostgreSQL/Redis yourself."; \
-		exit 1; \
-	fi
-
 .PHONY: check-backend-venv
 check-backend-venv:
-	@if [ ! -x "$(BACKEND_BIN)/uvicorn" ] || [ ! -x "$(BACKEND_BIN)/celery" ] || [ ! -x "$(BACKEND_BIN)/alembic" ]; then \
+	@if [ ! -x "$(BACKEND_BIN)/uvicorn" ] || [ ! -x "$(BACKEND_BIN)/alembic" ]; then \
 		echo "Backend virtualenv is missing required commands under $(BACKEND_VENV)."; \
 		echo "Run: cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"; \
 		exit 1; \
@@ -115,9 +104,17 @@ check-frontend-deps:
 		exit 1; \
 	fi
 
-.PHONY: docker-up docker-down docker-restart docker-build docker-ps docker-logs docker-migrate docker-up-dwg
+.PHONY: prepare-local-docker
+prepare-local-docker:
+	mkdir -p "$(LOCAL_STORAGE_DIR)" "$(LOCAL_MODELS_DIR)"
+
+.PHONY: docker-up docker-up-dev docker-up-prod docker-down docker-restart docker-build docker-ps docker-logs docker-migrate docker-up-dwg
 docker-up: check-compose ## Start all Docker services (frontend, backend, worker, beat, postgres, redis)
 	$(COMPOSE) up -d --build $(DOCKER_SERVICES)
+
+docker-up-dev: docker-up ## Alias for all-Docker local development/test startup
+
+docker-up-prod: docker-up ## Alias for all-Docker production-like startup
 
 docker-down: check-compose ## Stop and remove all Docker services
 	$(COMPOSE) down
@@ -155,119 +152,87 @@ docker-stop-service: check-compose ## Stop one Docker service with SERVICE=<name
 	@test -n "$(SERVICE)" || (echo "Usage: make docker-stop-service SERVICE=backend" && exit 1)
 	$(COMPOSE) stop $(SERVICE)
 
-.PHONY: local-up local-down local-restart local-status local-db-setup local-migrate local-logs
-local-up: local-up-postgres local-db-setup local-up-redis local-migrate local-up-backend local-up-worker local-up-beat local-up-frontend ## Start all services without Docker (Homebrew infra + local app processes)
-	@echo "Local stack started. Frontend: http://localhost:$(LOCAL_FRONTEND_PORT) Backend: http://localhost:$(LOCAL_BACKEND_PORT)/api/v1/health"
+.PHONY: local-up local-down local-restart local-status local-migrate local-logs
+local-up: local-up-postgres local-up-redis local-migrate local-up-worker local-up-backend local-up-frontend ## Start hybrid local dev: host frontend/backend + Docker postgres/redis/worker
+	@echo "Hybrid local stack started. Frontend: http://localhost:$(LOCAL_FRONTEND_PORT) Backend: http://localhost:$(LOCAL_BACKEND_PORT)/api/v1/health"
 
-local-down: local-down-frontend local-down-beat local-down-worker local-down-backend local-down-redis local-down-postgres ## Stop all non-Docker services started by Make
-	@echo "Local stack stopped."
+local-down: local-down-frontend local-down-backend local-down-beat local-down-worker local-down-redis local-down-postgres ## Stop hybrid local dev services
+	@echo "Hybrid local stack stopped."
 
-local-restart: local-down local-up ## Restart all non-Docker services
+local-restart: local-down local-up ## Restart hybrid local dev services
 
-local-status: ## Show local PID-managed service status and infrastructure ports
+local-status: check-compose ## Show host frontend/backend and Docker local service status
 	@mkdir -p "$(PID_DIR)"
-	@for service in backend worker beat frontend; do \
+	@for service in backend frontend; do \
 		if [ -f "$(PID_DIR)/$$service.pid" ] && kill -0 "$$(cat "$(PID_DIR)/$$service.pid")" 2>/dev/null; then \
-			echo "$$service: running (pid $$(cat "$(PID_DIR)/$$service.pid"))"; \
+			echo "host $$service: running (pid $$(cat "$(PID_DIR)/$$service.pid"))"; \
 		else \
-			echo "$$service: stopped"; \
+			echo "host $$service: stopped"; \
 		fi; \
 	done
-	@nc -z "$(POSTGRES_HOST)" "$(POSTGRES_PORT)" >/dev/null 2>&1 && echo "postgres: reachable on $(POSTGRES_HOST):$(POSTGRES_PORT)" || echo "postgres: not reachable on $(POSTGRES_HOST):$(POSTGRES_PORT)"
-	@nc -z "$(REDIS_HOST)" "$(REDIS_PORT)" >/dev/null 2>&1 && echo "redis: reachable on $(REDIS_HOST):$(REDIS_PORT)" || echo "redis: not reachable on $(REDIS_HOST):$(REDIS_PORT)"
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) ps postgres redis worker beat
 
-local-db-setup: ## Create the local PostgreSQL role/database expected by .env
-	@if [ "$(LOCAL_INFRA)" = "external" ]; then \
-		echo "LOCAL_INFRA=external: skipping PostgreSQL role/database setup"; \
-	elif ! command -v psql >/dev/null 2>&1; then \
-		echo "psql is unavailable; install PostgreSQL client tools or create role/database manually"; \
-		exit 1; \
-	else \
-		if ! psql postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$(LOCAL_DB_USER)'" | grep -q 1; then \
-			echo "Creating PostgreSQL role $(LOCAL_DB_USER)..."; \
-			psql postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE $(LOCAL_DB_USER) LOGIN PASSWORD '$(LOCAL_DB_PASSWORD)'"; \
-		fi; \
-		if ! psql postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$(LOCAL_DB_NAME)'" | grep -q 1; then \
-			echo "Creating PostgreSQL database $(LOCAL_DB_NAME)..."; \
-			createdb -O "$(LOCAL_DB_USER)" "$(LOCAL_DB_NAME)"; \
-		fi; \
-	fi
-
-local-migrate: check-backend-venv ## Run Alembic migrations without Docker
+local-migrate: check-backend-venv ## Run Alembic migrations from the host backend against Docker PostgreSQL
 	cd backend && "$(BACKEND_BIN)/alembic" upgrade head
 
-local-logs: ## Follow all local app logs created by Make
+local-logs: ## Follow host backend/frontend logs created by Make
 	@mkdir -p "$(LOG_DIR)"
 	tail -n 100 -f "$(LOG_DIR)"/*.log
 
-.PHONY: local-up-postgres local-up-redis local-down-postgres local-down-redis
-local-up-postgres: check-brew ## Start local PostgreSQL without Docker (Homebrew by default)
-	@if [ "$(LOCAL_INFRA)" = "external" ]; then \
-		echo "LOCAL_INFRA=external: assuming PostgreSQL is managed outside Make"; \
-	else \
-		brew services start "$(BREW_POSTGRES_SERVICE)"; \
-	fi
-	$(call wait_port,PostgreSQL,$(POSTGRES_HOST),$(POSTGRES_PORT))
+.PHONY: local-up-postgres local-up-redis local-up-worker local-up-beat local-down-postgres local-down-redis local-down-worker local-down-beat
+local-up-postgres: check-compose prepare-local-docker ## Start local-dev PostgreSQL in Docker
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) up -d postgres
+	$(call wait_port,PostgreSQL,localhost,5432)
 
-local-up-redis: check-brew ## Start local Redis without Docker (Homebrew by default)
-	@if [ "$(LOCAL_INFRA)" = "external" ]; then \
-		echo "LOCAL_INFRA=external: assuming Redis is managed outside Make"; \
-	else \
-		brew services start "$(BREW_REDIS_SERVICE)"; \
-	fi
-	$(call wait_port,Redis,$(REDIS_HOST),$(REDIS_PORT))
+local-up-redis: check-compose prepare-local-docker ## Start local-dev Redis in Docker
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) up -d redis
+	$(call wait_port,Redis,localhost,6379)
 
-local-down-postgres: check-brew ## Stop local PostgreSQL if LOCAL_INFRA=brew
-	@if [ "$(LOCAL_INFRA)" = "external" ]; then \
-		echo "LOCAL_INFRA=external: leaving PostgreSQL untouched"; \
-	else \
-		brew services stop "$(BREW_POSTGRES_SERVICE)" || true; \
-	fi
+local-up-worker: check-compose prepare-local-docker ## Start local-dev Celery worker in Docker
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) up -d --build worker
 
-local-down-redis: check-brew ## Stop local Redis if LOCAL_INFRA=brew
-	@if [ "$(LOCAL_INFRA)" = "external" ]; then \
-		echo "LOCAL_INFRA=external: leaving Redis untouched"; \
-	else \
-		brew services stop "$(BREW_REDIS_SERVICE)" || true; \
-	fi
+local-up-beat: check-compose prepare-local-docker ## Optionally start local-dev Celery Beat in Docker
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) up -d --build beat
 
-.PHONY: local-up-backend local-up-worker local-up-beat local-up-frontend
-local-up-backend: check-backend-venv ## Start FastAPI without Docker in the background
-	$(call start_local_service,backend,cd backend && "$(BACKEND_BIN)/uvicorn" app.main:app --reload --host "$(LOCAL_BACKEND_HOST)" --port "$(LOCAL_BACKEND_PORT)")
+local-down-postgres: check-compose ## Stop local-dev Docker PostgreSQL
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) stop postgres
 
-local-up-worker: check-backend-venv ## Start Celery worker without Docker in the background
-	$(call start_local_service,worker,cd backend && "$(BACKEND_BIN)/celery" -A app.tasks.celery_app worker --loglevel="$(CELERY_LOG_LEVEL)")
+local-down-redis: check-compose ## Stop local-dev Docker Redis
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) stop redis
 
-local-up-beat: check-backend-venv ## Start Celery Beat without Docker in the background
-	$(call start_local_service,beat,cd backend && "$(BACKEND_BIN)/celery" -A app.tasks.celery_app beat --loglevel="$(CELERY_LOG_LEVEL)")
+local-down-worker: check-compose ## Stop local-dev Docker worker
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) stop worker
 
-local-up-frontend: check-frontend-deps ## Start Next.js without Docker in the background
-	$(call start_local_service,frontend,cd frontend && npm run dev -- --hostname "$(LOCAL_FRONTEND_HOST)" --port "$(LOCAL_FRONTEND_PORT)")
+local-down-beat: check-compose ## Stop local-dev Docker Beat if running
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) stop beat || true
 
-.PHONY: local-down-backend local-down-worker local-down-beat local-down-frontend
-local-down-backend: ## Stop local FastAPI process started by Make
-	$(call stop_local_service,backend)
+.PHONY: local-up-backend local-up-frontend local-down-backend local-down-frontend
+local-up-backend: check-backend-venv prepare-local-docker ## Start FastAPI on the host
+	$(call start_host_service,backend,cd backend && "$(BACKEND_BIN)/uvicorn" app.main:app --reload --host "$(LOCAL_BACKEND_HOST)" --port "$(LOCAL_BACKEND_PORT)")
 
-local-down-worker: ## Stop local Celery worker process started by Make
-	$(call stop_local_service,worker)
+local-up-frontend: check-frontend-deps ## Start Next.js on the host
+	$(call start_host_service,frontend,cd frontend && npm run dev -- --hostname "$(LOCAL_FRONTEND_HOST)" --port "$(LOCAL_FRONTEND_PORT)")
 
-local-down-beat: ## Stop local Celery Beat process started by Make
-	$(call stop_local_service,beat)
+local-down-backend: ## Stop host FastAPI process started by Make
+	$(call stop_host_service,backend)
 
-local-down-frontend: ## Stop local Next.js process started by Make
-	$(call stop_local_service,frontend)
+local-down-frontend: ## Stop host Next.js process started by Make
+	$(call stop_host_service,frontend)
 
-.PHONY: logs-backend logs-worker logs-beat logs-frontend clean-local-runtime
-logs-backend logs-worker logs-beat logs-frontend: ## Follow one local service log (target suffix selects service)
+.PHONY: logs-backend logs-frontend logs-worker logs-beat clean-local-runtime
+logs-backend logs-frontend: ## Follow one host service log (target suffix selects service)
 	@mkdir -p "$(LOG_DIR)"
 	tail -n 100 -f "$(LOG_DIR)/$(subst logs-,,$@).log"
 
-clean-local-runtime: ## Remove local Make PID/log runtime files
+logs-worker logs-beat: check-compose ## Follow one Docker service log (target suffix selects service)
+	$(LOCAL_DOCKER_ENV) $(COMPOSE) logs -f --tail=100 $(subst logs-,,$@)
+
+clean-local-runtime: ## Remove host Make PID/log runtime files
 	rm -rf "$(PID_DIR)" "$(LOG_DIR)"
 
 .PHONY: up down restart
-up: local-up ## Alias: start all services without Docker
+up: local-up ## Alias: start hybrid local dev services
 
-down: local-down ## Alias: stop all services without Docker
+down: local-down ## Alias: stop hybrid local dev services
 
-restart: local-restart ## Alias: restart all services without Docker
+restart: local-restart ## Alias: restart hybrid local dev services

@@ -10,6 +10,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.database import async_session
 from app.models.job import Job
 from app.pipeline import (
@@ -44,6 +45,30 @@ def publish_progress(job_id: str, status: str, progress: int, step: str) -> None
         progress=progress,
         step=step,
     )
+
+
+def portable_storage_path(path: Path | None) -> str | None:
+    """Return a storage path that is portable across host and container runtimes.
+
+    Hybrid local development runs the API on the host and the worker in Docker.
+    Persisting an absolute container path such as ``/app/storage/...`` would make
+    the host API unable to serve completed outputs. When an output lives under
+    ``settings.STORAGE_PATH``, persist it relative to that configured storage
+    root if the root itself is relative; otherwise keep the absolute path used by
+    the all-Docker workflow.
+    """
+    if path is None:
+        return None
+
+    storage_path = Path(get_settings().STORAGE_PATH)
+    storage_base = storage_path.resolve()
+    resolved_path = path.resolve()
+    try:
+        relative_path = resolved_path.relative_to(storage_base)
+    except ValueError:
+        return str(path)
+
+    return str(storage_path / relative_path)
 
 
 @celery_app.task(
@@ -130,7 +155,7 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
         job.status = "completed"
         job.progress = 100
         job.step = "Completed"
-        job.output_file = str(result_context.output_path) if result_context.output_path else None
+        job.output_file = portable_storage_path(result_context.output_path)
         page_count = result_context.metadata.get("page_count")
         if isinstance(page_count, int):
             job.page_count = page_count
