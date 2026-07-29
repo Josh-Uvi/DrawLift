@@ -1,11 +1,14 @@
 """Celery task that runs the PDF-to-DXF conversion pipeline."""
 
+# cspell:words autoretry
+
 from __future__ import annotations
 
 import asyncio
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ParamSpec, Protocol, TypeVar, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -28,6 +31,44 @@ from app.pipeline import (
 )
 from app.pipeline.progress import get_progress_publisher
 from app.tasks.celery_app import celery_app
+
+_P = ParamSpec("_P")
+_R_co = TypeVar("_R_co", covariant=True)
+
+
+class _CeleryTask(Protocol[_P, _R_co]):
+    """Typed subset of a registered Celery task used by API enqueue sites."""
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R_co:
+        """Run the task synchronously with the wrapped function signature."""
+        ...
+
+    def delay(self, *args: Any, **kwargs: Any) -> Any:
+        """Enqueue the task asynchronously via Celery."""
+        ...
+
+
+class _TypedCeleryApp(Protocol):
+    """Typed subset of Celery used to register tasks in this module."""
+
+    def task(
+        self, *args: Any, **kwargs: Any
+    ) -> Callable[[Callable[_P, _R_co]], _CeleryTask[_P, _R_co]]:
+        """Return a decorator that produces a typed Celery task object."""
+        ...
+
+
+def celery_task(
+    *args: Any, **kwargs: Any
+) -> Callable[[Callable[_P, _R_co]], _CeleryTask[_P, _R_co]]:
+    """Return a typed Celery task decorator for Pylance/Pyright.
+
+    Celery's dynamic ``task`` API is typed as partially unknown, which causes
+    static analysis to treat decorated functions as untyped. This wrapper keeps
+    the runtime behavior unchanged while exposing both the original callable
+    signature and Celery task methods such as ``delay`` to type checkers.
+    """
+    return cast(_TypedCeleryApp, celery_app).task(*args, **kwargs)
 
 
 def publish_progress(job_id: str, status: str, progress: int, step: str) -> None:
@@ -71,7 +112,7 @@ def portable_storage_path(path: Path | None) -> str | None:
     return str(storage_path / relative_path)
 
 
-@celery_app.task(
+@celery_task(
     bind=True,
     name="app.tasks.placeholder.process_job",
     autoretry_for=(Exception,),
