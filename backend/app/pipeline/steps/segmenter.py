@@ -21,7 +21,7 @@ ML_SEGMENTER = "ml"
 CLASSIC_SEGMENTER = "classic"
 DEFAULT_SEGMENTER = CLASSIC_SEGMENTER
 DEFAULT_MODEL_FILENAME = "semantic_segmenter.onnx"
-DEFAULT_MODEL_INPUT_SIZE: tuple[int, int] = (512, 512)
+DEFAULT_MODEL_INPUT_SIZE: tuple[int, int] = (256, 256)
 
 SegmentationMasks = dict[str, list[np.ndarray]]
 MaskPathMap = dict[str, list[Path]]
@@ -121,12 +121,15 @@ class OnnxSemanticSegmenter:
         model_path: Path | str | None = None,
         model_url: str | None = None,
         models_dir: Path | str | None = None,
-        input_size: tuple[int, int] = DEFAULT_MODEL_INPUT_SIZE,
+        input_size: tuple[int, int] | None = None,
     ) -> None:
         """Create an ONNX segmenter with an optional model override."""
         self.model_path = Path(model_path) if model_path is not None else None
         self.model_url = model_url
         self.models_dir = Path(models_dir) if models_dir is not None else None
+        if input_size is None:
+            size = get_settings().SEGMENTER_MODEL_INPUT_SIZE
+            input_size = (size, size)
         self.input_size = input_size
 
     def preload(self) -> None:
