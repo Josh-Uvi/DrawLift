@@ -135,8 +135,19 @@ make clean-local-runtime
 | Symptom | Check |
 | --- | --- |
 | Frontend cannot reach API | Confirm `NEXT_PUBLIC_API_URL` and backend port 8000. |
-| Jobs stay pending | Check worker logs and Redis health. |
+| Jobs stay pending | Confirm the worker is running (`make local-status` or `docker-compose ps`) and check `make logs-worker` for `Received unregistered task` errors. Task modules must be listed in the Celery `include` setting in `backend/app/tasks/celery_app.py`. |
+| No progress updates in UI | Conversion progress is emitted by the worker, not the API. Check `make logs-worker` (or `docker-compose logs worker`). The job page also polls the API every 3 seconds as a fallback, so confirm the backend is reachable. |
 | Downloads 404/409 | Confirm job is completed and output artifact exists. |
 | Page previews missing | Confirm parser produced `pages/page_0001.png` and `page_count`. |
 | DWG output missing | Confirm `output_format` and `DWG_CONVERTER_COMMAND`. |
 | Hybrid path issues | Confirm shared `LOCAL_STORAGE_DIR` and `LOCAL_MODELS_DIR`. |
+
+## Logging
+
+| Log target | Contents |
+| --- | --- |
+| `make logs-backend` / `docker-compose logs backend` | FastAPI HTTP requests and API errors. |
+| `make logs-worker` / `docker-compose logs worker` | Celery task lifecycle and conversion progress lines from `app.tasks.placeholder` (starting, step count, success/failure). |
+| `make logs-frontend` | Next.js dev server output. |
+
+Conversion status is logged by the worker, not the API. Watching only backend logs will not show conversion progress.

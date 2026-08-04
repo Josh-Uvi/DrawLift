@@ -60,6 +60,8 @@ sequenceDiagram
   A->>S: verify and stream file
 ```
 
+The worker publishes an initial `processing` event as soon as it claims the job, per-step events during the pipeline, and a terminal `completed` or `failed` event. The SSE endpoint closes the stream on either terminal status. The frontend also polls `GET /jobs/{id}` every 3 seconds as a fallback because Redis Pub/Sub does not replay events to late subscribers.
+
 ## Data model
 
 The core table is `jobs`, managed by Alembic migrations under `backend/alembic/versions/`.
@@ -96,7 +98,8 @@ The exact persisted path can be relative in hybrid local development so the host
 
 ## Boundaries
 
-- The frontend does not run conversion logic; it only uploads, polls/fetches, subscribes to SSE, previews, and downloads.
+- The frontend does not run conversion logic; it only uploads, polls/fetches, subscribes to SSE (with a polling fallback), previews, and downloads.
+- Celery task modules are registered explicitly via the `include` setting in `backend/app/tasks/celery_app.py`; a task module that is not listed there will not be executable by the worker.
 - FastAPI does not perform heavy conversion in request handlers; it creates jobs and serves files/status.
 - Pipeline steps are pluggable and operate on `PipelineContext`.
 - DWG generation is intentionally externalized because DWG is proprietary.

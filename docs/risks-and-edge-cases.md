@@ -29,6 +29,8 @@ DrawLift operates in a domain where input quality varies widely. This document l
 | PostgreSQL unavailable | API and worker cannot persist state. | Docker health checks; no HA in POC. |
 | Storage path mismatch | API cannot serve worker outputs. | `portable_storage_path` supports hybrid host/Docker paths. |
 | Cleanup deletes files | Historical jobs become archived and downloads unavailable. | TTL is explicit via `STORAGE_TTL_DAYS`. |
+| Late SSE subscriber | Browser opens the stream after events were published and misses them. | Frontend polls `GET /jobs/{id}` every 3 seconds as a fallback and applies terminal states authoritatively. |
+| Unregistered Celery task | Queued jobs are discarded and stay pending. | Task modules are explicitly listed in the Celery `include` setting; worker logs surface `Received unregistered task` errors. |
 
 ## API edge cases
 
