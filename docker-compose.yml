@@ -60,6 +60,7 @@ services:
       STORAGE_TTL_DAYS: 7
       MODELS_PATH: ${MODELS_PATH:-/app/models}
       DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
+      JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-300}
     volumes:
       - ./backend:/app
       - ${STORAGE_VOLUME:-storage_data}:/app/storage
@@ -70,6 +71,8 @@ services:
       redis:
         condition: service_healthy
     command: celery -A app.tasks.celery_app worker --loglevel=info
+    mem_limit: ${WORKER_MEM_LIMIT:-4g}
+    memswap_limit: ${WORKER_MEMSWAP_LIMIT:-6g}
 
   beat:
     build: ./backend
@@ -80,6 +83,7 @@ services:
       STORAGE_TTL_DAYS: 7
       MODELS_PATH: ${MODELS_PATH:-/app/models}
       DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
+      JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-300}
     volumes:
       - ./backend:/app
       - ${STORAGE_VOLUME:-storage_data}:/app/storage

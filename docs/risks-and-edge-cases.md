@@ -24,7 +24,7 @@ DrawLift operates in a domain where input quality varies widely. This document l
 
 | Risk | Impact | Mitigation in project |
 | --- | --- | --- |
-| Worker crash mid-job | Job may stay processing until retried or manually inspected. | Celery retries and error persistence for raised exceptions. |
+| Worker crash mid-job (OOM SIGKILL) | Job may stay `processing` indefinitely because SIGKILL cannot be caught. | `task_acks_late` re-queues the task; `worker_max_memory_per_child` recycles workers before OOM; stale-job sweeper marks orphaned jobs as `failed` after `JOB_STALE_TIMEOUT_SECONDS`; segmenter processes pages one at a time to reduce peak memory. |
 | Redis unavailable | Queue and SSE progress fail. | Docker health checks; no HA in POC. |
 | PostgreSQL unavailable | API and worker cannot persist state. | Docker health checks; no HA in POC. |
 | Storage path mismatch | API cannot serve worker outputs. | `portable_storage_path` supports hybrid host/Docker paths. |

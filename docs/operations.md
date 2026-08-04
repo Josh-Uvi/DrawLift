@@ -22,6 +22,9 @@ Important variables:
 | `DWG_CONVERTER_COMMAND` | Optional external DWG conversion command template. |
 | `CORS_ORIGINS` | Allowed frontend origins. |
 | `NEXT_PUBLIC_API_URL` | Browser-visible API base URL. |
+| `JOB_STALE_TIMEOUT_SECONDS` | Seconds a job may stay in `processing` before being marked `failed` (default 300). |
+| `WORKER_MEM_LIMIT` | Docker memory limit for the Celery worker (default `4g`). |
+| `WORKER_MEMSWAP_LIMIT` | Docker memory+swap limit for the worker (default `6g`). |
 
 ## Docker workflow
 
@@ -122,7 +125,10 @@ pre-commit run --all-files
 
 ## Cleanup
 
-Celery Beat runs cleanup based on `STORAGE_TTL_DAYS`. Cleanup archives job metadata and removes expired local files.
+Celery Beat runs two periodic cleanup tasks:
+
+1. **Expired-job cleanup** (daily) — archives jobs and removes local files older than `STORAGE_TTL_DAYS`.
+2. **Stale-job recovery** (every 5 minutes) — marks jobs stuck in `processing` for longer than `JOB_STALE_TIMEOUT_SECONDS` as `failed`. This handles the case where a worker is killed (e.g. OOM SIGKILL) before it can write a failure status.
 
 For local Make runtime files:
 
@@ -141,6 +147,8 @@ make clean-local-runtime
 | Page previews missing | Confirm parser produced `pages/page_0001.png` and `page_count`. |
 | DWG output missing | Confirm `output_format` and `DWG_CONVERTER_COMMAND`. |
 | Hybrid path issues | Confirm shared `LOCAL_STORAGE_DIR` and `LOCAL_MODELS_DIR`. |
+| Worker killed by SIGKILL (OOM) | The ONNX segmentation model + image pipeline can exceed the container memory limit. Check `docker-compose logs worker` for `signal 9 (SIGKILL)` / `WorkerLostError`. Increase `WORKER_MEM_LIMIT` / `WORKER_MEMSWAP_LIMIT` in `.env`, or reduce PDF DPI. The stale-job sweeper will eventually mark the orphaned job as `failed`. |
+| Jobs stuck in `processing` | A worker may have been killed before writing a failure status. The stale-job sweeper (every 5 min) will transition these to `failed` after `JOB_STALE_TIMEOUT_SECONDS`. Verify the worker is running and check logs for OOM or errors. |
 
 ## Logging
 
