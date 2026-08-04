@@ -32,6 +32,7 @@ class SemanticSegmenter(Protocol):
 
     def segment(self, images: Sequence[np.ndarray]) -> SegmentationMasks:
         """Return per-label masks for every input image."""
+        ...
 
 
 class ClassicCVSegmenter:
@@ -72,14 +73,14 @@ class ClassicCVSegmenter:
         min_dimension = max(1, min(image.shape[:2]))
         min_line_length = max(12, min_dimension // 8)
         threshold = max(12, min_dimension // 10)
-        lines = cv2.HoughLinesP(
+        lines = cast(np.ndarray | None, cv2.HoughLinesP(
             edges,
             rho=1,
             theta=np.pi / 180,
             threshold=threshold,
             minLineLength=min_line_length,
             maxLineGap=8,
-        )
+        ))
 
         wall_mask = np.zeros_like(image, dtype=np.uint8)
         if lines is None:
@@ -404,7 +405,7 @@ def _require_image_array(value: object) -> np.ndarray:
     """Ensure preprocessed context entries are NumPy arrays."""
     if not isinstance(value, np.ndarray):
         raise TypeError("SegmenterStep expects preprocessed images to be NumPy arrays")
-    return value
+    return cast(np.ndarray, value)
 
 
 def _validate_masks(masks: SegmentationMasks, *, expected_pages: int) -> None:

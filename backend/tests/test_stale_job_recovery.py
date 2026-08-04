@@ -59,7 +59,9 @@ async def test_cleanup_stale_marks_timed_out_processing_jobs(
     )
 
     with patch.object(cleanup, "async_session", return_value=mock_session_cm):
-        count = await cleanup._cleanup_stale_jobs_async(now=cutoff_time)
+        count = await cleanup._cleanup_stale_jobs_async(  # pyright: ignore[reportPrivateUsage]
+            now=cutoff_time,
+        )
 
     assert count == 1
     assert stale_job.status == "failed"
@@ -97,7 +99,9 @@ async def test_cleanup_stale_skips_recent_processing_jobs(
     )
 
     with patch.object(cleanup, "async_session", return_value=mock_session_cm):
-        count = await cleanup._cleanup_stale_jobs_async(now=now)
+        count = await cleanup._cleanup_stale_jobs_async(  # pyright: ignore[reportPrivateUsage]
+            now=now,
+        )
 
     assert count == 0
     assert recent_job.status == "processing"
@@ -132,7 +136,9 @@ async def test_cleanup_stale_does_not_touch_completed_jobs(
     )
 
     with patch.object(cleanup, "async_session", return_value=mock_session_cm):
-        count = await cleanup._cleanup_stale_jobs_async(now=now)
+        count = await cleanup._cleanup_stale_jobs_async(  # pyright: ignore[reportPrivateUsage]
+            now=now,
+        )
 
     assert count == 0
     mock_session.commit.assert_awaited_once()

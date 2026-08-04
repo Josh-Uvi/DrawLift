@@ -36,5 +36,5 @@ fileignoreconfig:
 - filename: README.md
   checksum: 429ddfe6d5318eee82bb0f7c24fa680cacaa5a525cde7e09671fdb4a25126a47
 - filename: backend/tests/test_stale_job_recovery.py
-  checksum: fc139678875776a1e8fa7b4b1467b5b19e5c93a92fd734d98c4e44a981949b31
+  checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
 version: "1.0"
