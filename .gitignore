@@ -29,6 +29,8 @@ coverage/
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
+.env.local
+.env
 
 # ─── Python / Backend ─────────────────────────────────────────
 # Byte-compiled / optimized

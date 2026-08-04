@@ -51,6 +51,18 @@ flowchart TD
 | GLB writing | `glb_writer.py` | Export self-contained GLB for browser preview and download. | 97% |
 | DWG conversion | `dwg_converter.py` | Run configured external converter command. | 98% |
 
+## Progress reporting
+
+The task publishes progress through Redis Pub/Sub on channel `job:{job_id}`:
+
+1. `processing` / 0% / `Starting` as soon as the worker claims the job.
+2. One event per step (see Typical progress above) as each step completes.
+3. `completed` / 100% or `failed` with the error message as the terminal event.
+
+The FastAPI SSE endpoint forwards these events and closes the stream on `completed` or `failed`. The job page also polls the REST API every 3 seconds, so progress stays visible even if the browser subscribed after some events were published.
+
+The task also logs lifecycle lines (`Job {id}: starting conversion`, `running pipeline with N step(s)`, `pipeline completed successfully`, or `pipeline failed`) to the worker log.
+
 ## Output layers and artifacts
 
 DXF outputs use domain-oriented layers such as:

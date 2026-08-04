@@ -12,6 +12,7 @@ celery_app = Celery(
     "ai_file_converter",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
+    include=["app.tasks.placeholder", "app.tasks.cleanup"],
 )
 
 celery_app.conf.update(
@@ -29,8 +30,6 @@ celery_app.conf.update(
         },
     },
 )
-
-celery_app.autodiscover_tasks(["app.tasks"])
 
 
 @worker_process_init.connect

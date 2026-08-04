@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getJob } from "@/lib/api";
 import { createSSEStream } from "@/lib/sse";
 import { SSEProgressEvent, JobStatus } from "@/types/api";
 
@@ -58,6 +59,53 @@ export default function ProgressTracker({
     );
 
     return () => eventSource.close();
+  }, [initialStatus, jobId, onComplete]);
+
+  // Poll the REST API as a fallback so the UI stays in sync when SSE
+  // events are missed (Redis Pub/Sub does not replay past events).
+  useEffect(() => {
+    if (
+      initialStatus === "completed" ||
+      initialStatus === "failed" ||
+      initialStatus === "archived"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    const poll = async () => {
+      try {
+        const job = await getJob(jobId);
+        if (cancelled) return;
+
+        if (job.status === "completed" || job.status === "failed" || job.status === "archived") {
+          setProgress(job.progress);
+          setStep(job.step ?? "");
+          setStatus(job.status);
+          setMessage(job.error_msg ?? null);
+          if (interval) clearInterval(interval);
+          onComplete?.();
+          return;
+        }
+
+        // Only advance state; SSE may already be ahead of the database.
+        setStatus((current) =>
+          current === "pending" || current === "queued" ? job.status : current
+        );
+        setProgress((current) => Math.max(current, job.progress));
+      } catch {
+        // Transient polling errors are ignored; SSE remains the primary channel.
+      }
+    };
+
+    interval = setInterval(poll, 3000);
+
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
   }, [initialStatus, jobId, onComplete]);
 
   return (
