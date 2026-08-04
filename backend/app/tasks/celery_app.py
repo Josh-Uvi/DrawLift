@@ -100,21 +100,17 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     result_expires=3600,
-    # Ack tasks immediately so the broker does NOT re-queue them when a worker
-    # process is killed (e.g. OOM SIGKILL).  With task_acks_late=True the
-    # broker re-queues un-acked tasks indefinitely, causing an infinite retry
-    # loop.  task_acks_late=False + autoretry_for gives us controlled retries
-    # for task-level exceptions only.
-    task_acks_late=False,
+    # Re-queue tasks if the worker process is killed (e.g. OOM SIGKILL) so
+    # they can be retried on a fresh worker instead of being lost forever.
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
     # Hard / soft time limits prevent hung tasks from blocking a worker.
-    task_time_limit=120,
-    task_soft_time_limit=100,
+    task_time_limit=600,
+    task_soft_time_limit=540,
     # Recycle worker child processes before they hit the container OOM limit.
-    # 1 GiB is conservative enough to recycle before the ONNX model + image
-    # pipeline approaches the 4 GiB mem_limit, but large enough to run a
-    # single conversion job. The ONNX model is loaded lazily (not preloaded)
-    # so worker startup memory is minimal.
-    worker_max_memory_per_child=1 * 1024 * 1024 * 1024,
+    # 3 GiB leaves headroom under the 4 GiB mem_limit configured in
+    # docker-compose.yml for the ONNX model + image processing pipeline.
+    worker_max_memory_per_child=3 * 1024 * 1024 * 1024,
     beat_schedule={
         "cleanup-expired-jobs-daily": {
             "task": "app.tasks.cleanup.cleanup_expired_jobs",

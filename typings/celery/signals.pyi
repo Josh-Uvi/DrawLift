@@ -12,5 +12,3 @@ class BaseSignal:
     def connect(self, fun: _F, **kwargs: Any) -> _F: ...
 
 worker_process_init: BaseSignal
-task_failure: BaseSignal
-task_postrun: BaseSignal

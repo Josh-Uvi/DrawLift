@@ -131,8 +131,6 @@ Celery Beat runs two periodic cleanup tasks:
 1. **Expired-job cleanup** (daily) — archives jobs and removes local files older than `STORAGE_TTL_DAYS`.
 2. **Stale-job recovery** (every 5 minutes) — marks jobs stuck in `processing` for longer than `JOB_STALE_TIMEOUT_SECONDS` as `failed`. This handles the case where a worker is killed (e.g. OOM SIGKILL) before it can write a failure status.
 
-Additionally, a `task_failure` Celery signal handler in `celery_app.py` acts as an immediate back-stop: when any task fails or a worker is lost, the handler marks the associated job as `failed` in the database without waiting for the Beat scheduler.
-
 For local Make runtime files:
 
 ```bash
@@ -150,8 +148,8 @@ make clean-local-runtime
 | Page previews missing | Confirm parser produced `pages/page_0001.png` and `page_count`. |
 | DWG output missing | Confirm `output_format` and `DWG_CONVERTER_COMMAND`. |
 | Hybrid path issues | Confirm shared `LOCAL_STORAGE_DIR` and `LOCAL_MODELS_DIR`. |
-| Worker killed by SIGKILL (OOM) | The ONNX segmentation model + image pipeline can exceed the container memory limit. Check `docker-compose logs worker` for `signal 9 (SIGKILL)` / `WorkerLostError`. Increase `WORKER_MEM_LIMIT` / `WORKER_MEMSWAP_LIMIT` in `.env`, reduce `SEGMENTER_MODEL_INPUT_SIZE`, or lower PDF DPI. `task_acks_late=False` prevents infinite broker re-queue loops when a worker is killed; the `task_failure` signal handler marks the orphaned job as `failed` immediately, and the stale-job sweeper (every 5 min) is a back-stop. |
-| Jobs stuck in `processing` | A worker may have been killed before writing a failure status. The `task_failure` signal handler marks the job as `failed` within seconds of the worker death. The stale-job sweeper (every 5 min) is a back-stop that transitions jobs stuck in `processing` to `failed` after `JOB_STALE_TIMEOUT_SECONDS`. In hybrid local mode, start the Beat scheduler with `make local-up-beat` to enable periodic sweeps. |
+| Worker killed by SIGKILL (OOM) | The ONNX segmentation model + image pipeline can exceed the container memory limit. Check `docker-compose logs worker` for `signal 9 (SIGKILL)` / `WorkerLostError`. Increase `WORKER_MEM_LIMIT` / `WORKER_MEMSWAP_LIMIT` in `.env`, or reduce PDF DPI. The stale-job sweeper will eventually mark the orphaned job as `failed`. |
+| Jobs stuck in `processing` | A worker may have been killed before writing a failure status. The stale-job sweeper (every 5 min) will transition these to `failed` after `JOB_STALE_TIMEOUT_SECONDS`. Verify the worker is running and check logs for OOM or errors. |
 
 ## Logging
 

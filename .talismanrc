@@ -2,7 +2,7 @@ fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
   checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: .env.example
-  checksum: 8bcca01839257826920bc481aca95685ae47f653d01170936c900202c2d97348
+  checksum: ce36f940b9791f236b9ba6bbf276ca64cce685de9f51b619c8bb7592bb1ca449
 - filename: backend/alembic/env.py
   checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
 - filename: backend/alembic.ini
