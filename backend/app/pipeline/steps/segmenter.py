@@ -73,14 +73,17 @@ class ClassicCVSegmenter:
         min_dimension = max(1, min(image.shape[:2]))
         min_line_length = max(12, min_dimension // 8)
         threshold = max(12, min_dimension // 10)
-        lines = cast(np.ndarray | None, cv2.HoughLinesP(
-            edges,
-            rho=1,
-            theta=np.pi / 180,
-            threshold=threshold,
-            minLineLength=min_line_length,
-            maxLineGap=8,
-        ))
+        lines = cast(
+            np.ndarray | None,
+            cv2.HoughLinesP(
+                edges,
+                rho=1,
+                theta=np.pi / 180,
+                threshold=threshold,
+                minLineLength=min_line_length,
+                maxLineGap=8,
+            ),
+        )
 
         wall_mask = np.zeros_like(image, dtype=np.uint8)
         if lines is None:
