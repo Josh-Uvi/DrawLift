@@ -31,4 +31,6 @@ fileignoreconfig:
   checksum: ea9ed540884f893a02d0efd11f9787cece503ad543a09724f9c67b17c3817ed0
 - filename: backend/tests/test_placeholder_task_paths.py
   checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
+- filename: README.md
+  checksum: 429ddfe6d5318eee82bb0f7c24fa680cacaa5a525cde7e09671fdb4a25126a47
 version: "1.0"
