@@ -49,23 +49,39 @@ endef
 define stop_host_service
 	@if [ -f "$(PID_DIR)/$(1).pid" ]; then \
 		PID="$$(cat "$(PID_DIR)/$(1).pid")"; \
+		list_tree() { \
+			echo "$$1"; \
+			for child in $$(pgrep -P "$$1" 2>/dev/null); do \
+				list_tree "$$child"; \
+			done; \
+		}; \
 		if kill -0 "$$PID" 2>/dev/null; then \
-			echo "Stopping host $(1) (pid $$PID)..."; \
-			kill "$$PID" 2>/dev/null || true; \
+			echo "Stopping host $(1) (pid $$PID) and its process tree..."; \
+			TREE_PIDS="$$(list_tree "$$PID" | sort -rn | uniq)"; \
+			kill -TERM $$TREE_PIDS 2>/dev/null || true; \
 			for _ in $$(seq 1 10); do \
-				kill -0 "$$PID" 2>/dev/null || break; \
+				ALIVE=0; \
+				for p in $$TREE_PIDS; do \
+					if kill -0 "$$p" 2>/dev/null; then ALIVE=1; break; fi; \
+				done; \
+				[ "$$ALIVE" -eq 0 ] && break; \
 				sleep 1; \
 			done; \
-			if kill -0 "$$PID" 2>/dev/null; then \
-				echo "Force stopping host $(1) (pid $$PID)..."; \
-				kill -9 "$$PID" 2>/dev/null || true; \
+			ALIVE=0; \
+			for p in $$TREE_PIDS; do \
+				if kill -0 "$$p" 2>/dev/null; then ALIVE=1; break; fi; \
+			done; \
+			if [ "$$ALIVE" -eq 1 ]; then \
+				echo "Force stopping host $(1) process tree (pids: $$TREE_PIDS)..."; \
+				kill -KILL $$TREE_PIDS 2>/dev/null || true; \
 			fi; \
+			echo "host $(1) stopped"; \
 		else \
-			echo "$(1) pid file exists, but process $$PID is not running"; \
+			echo "host $(1) pid file exists, but process $$PID is not running"; \
 		fi; \
 		rm -f "$(PID_DIR)/$(1).pid"; \
 	else \
-		echo "host $(1) is not running"; \
+		echo "host $(1) is not running (no pid file; if started outside make, stop it manually)"; \
 	fi
 endef
 
