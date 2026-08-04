@@ -2,7 +2,7 @@ fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
   checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: .env.example
-  checksum: 46473813f9e584b1c580acc20a223b04eeddbf9047df747243521bcf1153a08f
+  checksum: ce36f940b9791f236b9ba6bbf276ca64cce685de9f51b619c8bb7592bb1ca449
 - filename: backend/alembic/env.py
   checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
 - filename: backend/alembic.ini
@@ -35,4 +35,6 @@ fileignoreconfig:
   checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
 - filename: README.md
   checksum: 429ddfe6d5318eee82bb0f7c24fa680cacaa5a525cde7e09671fdb4a25126a47
+- filename: backend/tests/test_stale_job_recovery.py
+  checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
 version: "1.0"

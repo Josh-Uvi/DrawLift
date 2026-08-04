@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # DWG conversion
     DWG_CONVERTER_COMMAND: str | None = None
 
+    # Job recovery
+    # Seconds a job may remain in "processing" before being marked stale/failed.
+    JOB_STALE_TIMEOUT_SECONDS: int = 300
+
 
 @lru_cache
 def get_settings() -> Settings:

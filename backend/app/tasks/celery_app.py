@@ -23,10 +23,25 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     result_expires=3600,
+    # Re-queue tasks if the worker process is killed (e.g. OOM SIGKILL) so
+    # they can be retried on a fresh worker instead of being lost forever.
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    # Hard / soft time limits prevent hung tasks from blocking a worker.
+    task_time_limit=600,
+    task_soft_time_limit=540,
+    # Recycle worker child processes before they hit the container OOM limit.
+    # 3 GiB leaves headroom under the 4 GiB mem_limit configured in
+    # docker-compose.yml for the ONNX model + image processing pipeline.
+    worker_max_memory_per_child=3 * 1024 * 1024 * 1024,
     beat_schedule={
         "cleanup-expired-jobs-daily": {
             "task": "app.tasks.cleanup.cleanup_expired_jobs",
             "schedule": 60 * 60 * 24,
+        },
+        "cleanup-stale-jobs": {
+            "task": "app.tasks.cleanup.cleanup_stale_jobs",
+            "schedule": 60 * 5,
         },
     },
 )

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Bulk-create one GitHub issue per user story from stories.json."""
-import json, os, subprocess, sys
+
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 REPO = os.environ.get("REPO", "Josh-Uvi/DrawLift")
@@ -14,10 +18,23 @@ def gh(*args, check=True, capture=True):
 def find_existing_issue(title):
     try:
         r = subprocess.run(
-            ["gh", "issue", "list", "--repo", REPO, "--state", "all",
-             "--search", f'"{title}" in:title', "--limit", "5",
-             "--json", "number,title"],
-            capture_output=True, text=True,
+            [
+                "gh",
+                "issue",
+                "list",
+                "--repo",
+                REPO,
+                "--state",
+                "all",
+                "--search",
+                f'"{title}" in:title',
+                "--limit",
+                "5",
+                "--json",
+                "number,title",
+            ],
+            capture_output=True,
+            text=True,
         )
     except Exception:
         return None
@@ -32,24 +49,30 @@ def find_existing_issue(title):
 def get_milestone_numbers():
     r = subprocess.run(
         ["gh", "api", f"repos/{REPO}/milestones?state=open&per_page=100"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return {m["title"]: m["number"] for m in json.loads(r.stdout)}
 
 
 def render_body(s):
     parts = [
-        "## Context", s["title"], "",
+        "## Context",
+        s["title"],
+        "",
         f"**Priority:** {s['priority']}",
         f"**Stage / Milestone:** {s['stage']}",
         f"**Labels:** `{s['labels']}`",
-        "", "## Acceptance Criteria",
+        "",
+        "## Acceptance Criteria",
     ]
     parts += [f"- [ ] {a}" for a in s["ac"]]
     parts += ["", "## Tasks"]
     parts += [f"- [ ] {t}" for t in s["tasks"]]
     parts += [
-        "", "## Definition of Done",
+        "",
+        "## Definition of Done",
         "- [ ] All acceptance criteria checked",
         "- [ ] All linked tasks (T-XXX) completed",
         "- [ ] Lint passes (`ruff check` / `eslint`)",
@@ -79,9 +102,22 @@ def main():
         body = render_body(s)
         try:
             r = subprocess.run(
-                ["gh", "issue", "create", "--repo", REPO,
-                 "--title", full, "--body", body, "--label", s["labels"]],
-                capture_output=True, text=True, check=True,
+                [
+                    "gh",
+                    "issue",
+                    "create",
+                    "--repo",
+                    REPO,
+                    "--title",
+                    full,
+                    "--body",
+                    body,
+                    "--label",
+                    s["labels"],
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
             )
             num = int(r.stdout.strip().rsplit("/", 1)[-1])
         except subprocess.CalledProcessError as e:
@@ -91,9 +127,19 @@ def main():
 
         if s["stage"] in milestones:
             subprocess.run(
-                ["gh", "issue", "edit", str(num), "--repo", REPO,
-                 "--milestone", s["stage"]],
-                capture_output=True, text=True, check=True,
+                [
+                    "gh",
+                    "issue",
+                    "edit",
+                    str(num),
+                    "--repo",
+                    REPO,
+                    "--milestone",
+                    s["stage"],
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
             )
         print(f"  created {full} -> #{num}")
         ok += 1

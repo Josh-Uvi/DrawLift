@@ -32,6 +32,7 @@ class SemanticSegmenter(Protocol):
 
     def segment(self, images: Sequence[np.ndarray]) -> SegmentationMasks:
         """Return per-label masks for every input image."""
+        ...
 
 
 class ClassicCVSegmenter:
@@ -72,13 +73,16 @@ class ClassicCVSegmenter:
         min_dimension = max(1, min(image.shape[:2]))
         min_line_length = max(12, min_dimension // 8)
         threshold = max(12, min_dimension // 10)
-        lines = cv2.HoughLinesP(
-            edges,
-            rho=1,
-            theta=np.pi / 180,
-            threshold=threshold,
-            minLineLength=min_line_length,
-            maxLineGap=8,
+        lines = cast(
+            np.ndarray | None,
+            cv2.HoughLinesP(
+                edges,
+                rho=1,
+                theta=np.pi / 180,
+                threshold=threshold,
+                minLineLength=min_line_length,
+                maxLineGap=8,
+            ),
         )
 
         wall_mask = np.zeros_like(image, dtype=np.uint8)
@@ -130,16 +134,29 @@ class OnnxSemanticSegmenter:
         _get_onnx_session(str(self._resolve_model_path()))
 
     def segment(self, images: Sequence[np.ndarray]) -> SegmentationMasks:
-        """Run CPU ONNX inference and decode semantic masks for every page."""
+        """Run CPU ONNX inference and decode semantic masks for every page.
+
+        Pages are processed one at a time rather than batched together. This
+        keeps peak memory proportional to a single page's tensors instead of
+        ``N_pages × page_tensor_size``, which is critical for avoiding OOM
+        kills on memory-constrained worker containers.
+        """
         if not images:
             return _empty_mask_collection()
 
-        original_shapes = [image.shape[:2] for image in images]
-        batch = np.stack([self._prepare_input(image) for image in images], axis=0)
         session = _get_onnx_session(str(self._resolve_model_path()))
         input_name = session.get_inputs()[0].name
-        output = cast(Any, session.run(None, {input_name: batch})[0])
-        return self.decode_output(np.asarray(output), original_shapes)
+
+        masks = _empty_mask_collection()
+        for image in images:
+            original_shape = image.shape[:2]
+            single_input = self._prepare_input(image)[np.newaxis, :, :]
+            raw_output = cast(Any, session.run(None, {input_name: single_input})[0])
+            page_masks = self.decode_output(np.asarray(raw_output), [original_shape])
+            for label in MASK_LABELS:
+                masks[label].extend(page_masks[label])
+
+        return masks
 
     def _resolve_model_path(self) -> Path:
         """Return a cached ONNX model path, downloading from a configured URL if needed."""
@@ -391,7 +408,7 @@ def _require_image_array(value: object) -> np.ndarray:
     """Ensure preprocessed context entries are NumPy arrays."""
     if not isinstance(value, np.ndarray):
         raise TypeError("SegmenterStep expects preprocessed images to be NumPy arrays")
-    return value
+    return cast(np.ndarray, value)
 
 
 def _validate_masks(masks: SegmentationMasks, *, expected_pages: int) -> None:

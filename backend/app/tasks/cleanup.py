@@ -1,4 +1,4 @@
-"""Celery cleanup task for expiring old job files."""
+"""Celery cleanup tasks for expiring old job files and recovering stale jobs."""
 
 from __future__ import annotations
 
@@ -22,6 +22,18 @@ LOGGER = logging.getLogger(__name__)
 def cleanup_expired_jobs() -> int:
     """Archive jobs and delete local files older than the configured TTL."""
     return asyncio.run(_cleanup_expired_jobs_async())
+
+
+@celery_app.task(name="app.tasks.cleanup.cleanup_stale_jobs")
+def cleanup_stale_jobs() -> int:
+    """Mark jobs stuck in *processing* as *failed* so they stop blocking.
+
+    When a Celery worker is killed by SIGKILL (e.g. an OOM kill) the task's
+    exception handler never runs, leaving the job row in *processing* forever.
+    This periodic sweep detects such orphaned jobs and transitions them to
+    *failed* with a descriptive error message.
+    """
+    return asyncio.run(_cleanup_stale_jobs_async())
 
 
 async def _cleanup_expired_jobs_async(now: datetime | None = None) -> int:
@@ -61,3 +73,41 @@ def _delete_job_files(*, storage_base: Path, job: Job) -> None:
     if job_dir.exists():
         shutil.rmtree(job_dir)
         LOGGER.info("Deleted expired job files for %s", job.id)
+
+
+async def _cleanup_stale_jobs_async(now: datetime | None = None) -> int:
+    """Mark jobs stuck in *processing* longer than the timeout as *failed*.
+
+    Args:
+        now: Optional override for the current time (used in tests).
+
+    Returns:
+        The number of jobs transitioned to *failed*.
+    """
+    settings = get_settings()
+    cutoff = (now or datetime.now(UTC)) - timedelta(seconds=settings.JOB_STALE_TIMEOUT_SECONDS)
+    failed_count = 0
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(Job).where(Job.status == "processing", Job.updated_at < cutoff)
+        )
+        stale_jobs = result.scalars().all()
+        for job in stale_jobs:
+            job.status = "failed"
+            job.step = "Failed"
+            job.error_msg = (
+                f"Job timed out: was in 'processing' for longer than "
+                f"{settings.JOB_STALE_TIMEOUT_SECONDS}s (worker may have been killed)."
+            )
+            failed_count += 1
+
+        await session.commit()
+
+    if failed_count:
+        LOGGER.warning(
+            "Marked %s stale job(s) as failed (stale timeout: %ss)",
+            failed_count,
+            settings.JOB_STALE_TIMEOUT_SECONDS,
+        )
+    return failed_count
