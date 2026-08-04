@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -31,6 +32,8 @@ from app.pipeline import (
 )
 from app.pipeline.progress import get_progress_publisher
 from app.tasks.celery_app import celery_app
+
+LOGGER = logging.getLogger(__name__)
 
 _P = ParamSpec("_P")
 _R_co = TypeVar("_R_co", covariant=True)
@@ -147,6 +150,13 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
         job.error_msg = None
         job.error_trace = None
         await session.commit()
+        publish_progress(job_id, "processing", 0, "Starting")
+        LOGGER.info(
+            "Job %s: starting conversion (mode=%s, output_format=%s)",
+            job_id,
+            config.get("mode"),
+            config.get("output_format"),
+        )
 
         if not job.input_file:
             raise ValueError(f"Job {job_id} has no input file")
@@ -176,9 +186,11 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
 
         pipeline = Pipeline.from_steps(*steps, publish_step_progress=False)
 
+        LOGGER.info("Job %s: running pipeline with %d step(s)", job_id, len(steps))
         try:
             result_context = pipeline.run(context)
         except Exception as exc:
+            LOGGER.error("Job %s: pipeline failed: %s", job_id, exc)
             job.status = "failed"
             job.step = "Failed"
             job.error_msg = str(exc)
@@ -202,5 +214,6 @@ async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:
             job.page_count = page_count
         await session.commit()
 
+    LOGGER.info("Job %s: pipeline completed successfully", job_id)
     publish_progress(job_id, "completed", 100, "Completed")
     return "completed"
