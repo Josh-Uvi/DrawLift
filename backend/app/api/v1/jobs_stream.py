@@ -43,7 +43,7 @@ async def stream_job_progress(job_id: str) -> EventSourceResponse:
                     yield {"event": "progress", "data": data}
                     try:
                         payload = json.loads(data)
-                        if payload.get("status") == "completed":
+                        if payload.get("status") in ("completed", "failed"):
                             break
                     except (json.JSONDecodeError, KeyError):
                         pass
