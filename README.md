@@ -1,563 +1,80 @@
-# AI File Converter — Architecture Drawings to DWG
-
-A web application that converts architecture drawings (PDFs) into editable 2D or 3D CAD models in DWG (and DXF) format. Built with a modern, decoupled architecture that separates the user-facing experience (Next.js) from the compute-heavy image processing and ML pipeline (Python/FastAPI).
-
-> **Status:** Implementation in progress — Phase 1 (scaffolding & upload flow), Phase 2 (PDF parsing, preprocessing, page preview), Phase 3 2D vectorization/DXF export, Phase 4 3D extrusion, and Phase 5 production polish (DWG conversion hook, history UI, retries, and cleanup) are complete and in review. The default Docker stack now runs frontend, backend, worker, Celery Beat, PostgreSQL, and Redis, with an optional DWG converter profile for operator-supplied libredwg/ODA tooling.
->
-> 📋 **Looking for the execution plan?** See [TODO.md](./TODO.md) — a complete breakdown of 28 user stories and 94 actionable tasks managed as **GitHub Issues** via the `gh` CLI and the GitHub MCP server.
-
----
-
-## 1. Technology Stack
-
-| Layer                | Choice                                             | Rationale                                                                                                                                       |
-| -------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend**         | Next.js 14 (App Router) + TypeScript + TailwindCSS | React ecosystem, SSR-ready, built-in API proxy, excellent DX                                                                                    |
-| **Backend API**      | **Python 3.11 + FastAPI**                          | Unmatched ecosystem for image processing (OpenCV, PIL), ML (PyTorch/ONNX), and CAD libraries (ezdxf, libredwg). Node.js is weak in this domain. |
-| **Async Workers**    | Celery + Redis                                     | PDF→DWG conversion takes 30s–5min; must run out-of-band to avoid HTTP timeouts.                                                                 |
-| **Database**         | PostgreSQL 16                                      | Stores job metadata, config, and history. JSONB for flexible per-job settings.                                                                  |
-| **File Storage**     | Local FS (dev) / S3-compatible (prod)              | Large binary blobs (PDFs/DWGs) abstracted behind a storage adapter.                                                                             |
-| **Containerization** | Docker + Docker Compose                            | Reproducible dev env with frontend, API, Celery worker, Celery Beat, Redis, PostgreSQL, and optional DWG converter profile.                     |
-| **ML Inference**     | ONNX Runtime (production), PyTorch (training)      | CPU-friendly inference, easy model swaps.                                                                                                       |
-
----
-
-## 2. High-Level System Architecture
-
-```
-┌──────────────┐     HTTP/REST      ┌──────────────┐     Redis Queue     ┌───────────────┐
-│   Next.js    │ ─────────────────► │   FastAPI    │ ──────────────────► │    Celery     │
-│   Frontend   │ ◄───────────────── │   Backend    │ ◄────────────────── │    Worker     │
-│  (port 3000) │   JSON + SSE       │  (port 8000) │   Result Backend   │  (1–N procs)  │
-└──────────────┘                    └──────┬───────┘                     └───────┬───────┘
-                                          │                                     │
-                                          ▼                                     ▼
-                                   ┌──────────────┐                     ┌──────────────┐
-                                   │  PostgreSQL  │                     │ File Store   │
-                                   │  (metadata)  │                     │ (PDFs/DWGs)  │
-                                   └──────────────┘                     └──────────────┘
-```
-
-### End-to-end Flow
-
-1. User uploads a PDF via the Next.js UI → `POST /api/v1/jobs` to FastAPI.
-2. FastAPI validates, stores the PDF, creates a DB record (`status: pending`), enqueues a Celery task, returns `job_id`.
-3. Frontend subscribes to `/api/v1/jobs/{id}/stream` (SSE) for real-time progress.
-4. Celery worker runs the **conversion pipeline** (§3).
-5. Worker updates DB and stores the generated DXF, optional DWG, and 3D GLB artifacts.
-6. User downloads via `/api/v1/jobs/{id}/download`.
-
----
-
-## 3. Conversion Pipeline (Core IP)
-
-The pipeline runs inside the Celery worker and is composed of pluggable steps. Each step receives and returns a `PipelineContext`.
-
-```
-   PDF Input
-       │
-       ▼
-[1] PDF Parsing       PyMuPDF extracts each page as a high-res image (default 300 DPI)
-       │
-       ▼
-[2] Preprocessing     Grayscale → denoise → adaptive threshold → deskew (OpenCV)
-       │
-       ▼
-[3] Semantic          ML or Classic CV segmentation classifies pixels into:
-    Segmentation      Walls · Doors · Windows · Rooms · Text
-                      Options: ONNX Runtime CPU model · ClassicCV fallback
-       │
-       ▼
-[4] Vectorization     Wall centerlines + thickness estimation, contour detection,
-                      Douglas-Peucker simplification, and parametric primitives:
-                      walls, doors, windows, rooms, text regions
-       │
-       ▼
-[5] 3D Extrusion      (if 3D mode) Extrude walls into rectangular prisms by the
-   [optional]         configured floor height, add floor/ceiling slabs. Reports 85%.
-       │
-       ▼
-[6] DXF Writer        Write primitives to layered DXF with ezdxf (2D layers plus
-                      3D `WALLS_3D` / `SLABS` 3DFACE geometry). Reports 95%.
-       │
-       ▼
-[7] GLB Writer        (if 3D mode) Export a self-contained GLB (binary glTF) mesh
-   [optional]         with trimesh for browser preview and download. Reports 97%.
-        │
-        ▼
-[8] DWG Converter     (if requested) Convert generated DXF to DWG through an
-    [optional]         operator-supplied libredwg/ODA command. Reports 98%.
-       │
-       ▼
-  Output File(s)
-```
-
-### Reference: Pipeline Context
-
-```python
-@dataclass
-class PipelineContext:
-    job_id: str
-    input_path: Path
-    page_images: list[Path]            # populated by Step 1
-    preprocessed: list[np.ndarray]     # populated by Step 2
-    masks: dict[str, np.ndarray]       # populated by Step 3 (one per class)
-    primitives: list[Primitive]        # populated by Step 4
-    output_path: Path | None           # populated by Step 6
-    config: dict                       # user-provided options
-```
-
----
-
-## 4. Frontend Structure (Next.js)
-
-```
-frontend/src/
-├── app/
-│   ├── globals.css               # TailwindCSS global styles
-│   ├── layout.tsx                # Root layout, metadata, Toaster
-│   ├── page.tsx                  # Landing / upload page
-│   ├── history/page.tsx          # Conversion history and job management
-│   └── jobs/[id]/page.tsx        # Job detail: live progress via SSE
-│
-├── components/
-│   ├── upload/
-│   │   ├── DropZone.tsx          # Drag & drop (react-dropzone)
-│   │   └── ConversionOptions.tsx # 2D/3D toggle, DPI, floor height, format
-│   ├── job/
-│   │   ├── ProgressTracker.tsx   # Stepper: Uploaded → Processing → Completed/Failed
-│   │   ├── PageViewer.tsx        # Horizontal strip of page thumbnails
-│   │   ├── ImageModal.tsx        # Click-to-enlarge modal for page preview
-│   │   ├── Model3DPreview.tsx    # Browser GLB preview for 3D jobs
-│   │   ├── RetryButton.tsx       # Re-enqueue failed jobs with same config
-│   │   └── DownloadButton.tsx    # Completed-job DXF/DWG/GLB download links
-│   ├── history/
-│   │   └── JobTable.tsx          # Sort-by-date history table with delete action
-│   └── shared/
-│       ├── Button.tsx
-│       └── Card.tsx
-│
-├── lib/
-│   ├── api.ts                    # Typed fetch wrapper (uploadFile, getJob, listJobs)
-│   └── sse.ts                    # EventSource helper for progress streaming
-│
-└── types/
-    └── api.ts                    # Mirrors backend Pydantic schemas
-```
-
-### Key UX States
-
-- **Uploading** — Progress bar with file name & size.
-- **Queued** — "Waiting in queue, position #3".
-- **Processing** — Step-by-step progress: PDF Parsing → Segmentation → Vectorization → DWG.
-- **Completed** — Side-by-side preview (original page vs. generated wireframe), download links.
-- **Failed** — Actionable error message with retry button.
-- **Archived** — Job metadata retained after storage cleanup TTL removes files.
-
----
-
-## 5. REST API Design (FastAPI)
-
-| Method   | Endpoint                      | Description                                                                                                   |
-| -------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `POST`   | `/api/v1/jobs`                | Upload PDF + config (multipart/form-data) → returns `{ job_id }`                                              |
-| `GET`    | `/api/v1/jobs/{id}`           | Get job status, progress (0–100), current step                                                                |
-| `GET`    | `/api/v1/jobs/{id}/stream`    | **SSE** — real-time progress updates                                                                          |
-| `GET`    | `/api/v1/jobs/{id}/pages/{n}` | Extracted page image (for preview)                                                                            |
-| `GET`    | `/api/v1/jobs/{id}/download`  | Download generated DXF (default), DWG, or GLB via `?format=dxf\|dwg\|glb` with attachment Content-Disposition |
-| `GET`    | `/api/v1/jobs`                | List all jobs (paginated, filterable by status)                                                               |
-| `POST`   | `/api/v1/jobs/{id}/retry`     | Retry a failed job with the same uploaded file and config                                                     |
-| `DELETE` | `/api/v1/jobs/{id}`           | Delete job + associated files                                                                                 |
-| `GET`    | `/api/v1/health`              | Health check (liveness/readiness)                                                                             |
-
-### Example: Create Job Request
-
-```http
-POST /api/v1/jobs HTTP/1.1
-Content-Type: multipart/form-data; boundary=----X
-
-------X
-Content-Disposition: form-data; name="file"; filename="floorplan.pdf"
-Content-Type: application/pdf
-
-<binary pdf data>
-------X
-Content-Disposition: form-data; name="config"
-
-{"mode": "3d", "dpi": 300, "floor_height_m": 3.0, "output_format": "both"}
-------X--
-```
-
-### Example: SSE Progress Event
-
-```
-event: progress
-data: {"job_id": "abc-123", "status": "processing", "progress": 42, "step": "Vectorization"}
-```
-
----
-
-## 6. Data Model (PostgreSQL)
-
-```sql
--- Core job table
-CREATE TABLE jobs (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    status       VARCHAR(20)  NOT NULL DEFAULT 'pending',  -- pending|queued|processing|completed|failed|archived
-    progress     SMALLINT     NOT NULL DEFAULT 0,          -- 0-100
-    step         VARCHAR(50),                              -- current pipeline step name
-    config       JSONB        NOT NULL DEFAULT '{}',       -- {mode, dpi, floor_height_m, ...}
-    input_file   VARCHAR(500) NOT NULL,                    -- path/URL to uploaded PDF
-    output_file  VARCHAR(500),                             -- path/URL to generated DWG/DXF
-    page_count   SMALLINT,
-    error_msg    TEXT,
-    error_trace  TEXT,
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_jobs_created_at ON jobs(created_at DESC);
-CREATE INDEX idx_jobs_status     ON jobs(status);
-```
-
-> Alembic manages schema migrations. Each schema change gets a versioned migration file.
-
----
-
-## 7. Project Directory Layout
-
-```
-ai-file-converter/
-├── frontend/                       # Next.js 14 (App Router)
-│   ├── src/
-│   │   ├── app/                    # Pages (App Router)
-│   │   │   ├── layout.tsx         # Root layout + Toaster
-│   │   │   ├── page.tsx           # Landing / upload page
-│   │   │   ├── globals.css        # TailwindCSS globals
-│   │   │   ├── history/page.tsx   # Conversion history
-│   │   │   └── jobs/[id]/page.tsx # Job detail with live progress
-│   │   ├── components/            # React components
-│   │   │   ├── upload/            # DropZone, ConversionOptions
-│   │   │   ├── job/               # ProgressTracker, PageViewer, RetryButton, DownloadButton
-│   │   │   ├── history/           # JobTable
-│   │   │   └── shared/            # Button, Card
-│   │   ├── lib/                    # API client, SSE helper
-│   │   └── types/                  # TypeScript types (mirror backend schemas)
-│   ├── public/                    # Static assets
-│   ├── tailwind.config.ts
-│   ├── next.config.js
-│   ├── tsconfig.json
-│   ├── package.json
-│   └── Dockerfile
-│
-├── backend/                        # FastAPI + Celery
-│   ├── app/
-│   │   ├── api/
-│   │   │   └── v1/
-│   │   │       ├── health.py      # GET /health
-│   │   │       ├── jobs.py        # jobs CRUD + GET /jobs/{id}/download
-│   │   │       └── jobs_stream.py # GET /jobs/{id}/stream (SSE)
-│   │   ├── core/                   # Config (pydantic-settings), database
-│   │   ├── models/                 # SQLAlchemy ORM (Job model)
-│   │   ├── pipeline/               # PipelineContext, primitives, parser, preprocessing, segmentation, vectorization, DXF writer, progress
-│   │   ├── schemas/                # Pydantic request/response models
-│   │   ├── storage/                # Storage adapter (LocalStorage, ABC)
-│   │   └── tasks/                  # Celery app + conversion pipeline task
-│   ├── tests/                      # pytest coverage for API and pipeline steps
-│   ├── alembic/                    # DB migrations (0001_create_jobs_table)
-│   ├── requirements.txt
-│   ├── pyproject.toml              # ruff, mypy config
-│   └── Dockerfile
-│
-├── scripts/                        # GitHub bootstrap & issue creation
-├── docker-compose.yml              # Orchestrates app services plus optional DWG converter profile
-├── Makefile                        # One-command Docker and local service management
-├── .env.example                    # Environment variables template
-├── .pre-commit-config.yaml         # Local lint/format/type-check hooks
-├── .talismanrc                     # Pre-push hook config
-├── README.md                       # ← you are here (architecture)
-└── TODO.md                         # Execution tracker (GitHub Issues)
-```
-
----
-
-## 8. Design Patterns
-
-### 8.1 Strategy — Pluggable Pipeline Steps
-
-Each step implements a common interface so algorithms can be swapped without touching the orchestrator.
-
-```python
-class PipelineStep(ABC):
-    name: str
-
-    @abstractmethod
-    def execute(self, context: PipelineContext) -> PipelineContext: ...
-```
-
-Concrete implementations: `PdfParserStep`, `OpenCVPreprocessor`, `SegmenterStep`, `VectorizerStep`, `DxfWriterStep`, future 3D extruders, etc. New approaches drop in without changing `Pipeline.run()`.
-
-Implemented foundation:
-
-- `backend/app/pipeline/context.py` defines the shared `PipelineContext` dataclass.
-- `backend/app/pipeline/steps/base.py` defines the `PipelineStep` ABC.
-- `backend/app/pipeline/steps/pdf_parser.py` implements PyMuPDF-backed PDF page extraction.
-- `backend/app/pipeline/steps/preprocessor.py` implements OpenCV grayscale, Gaussian blur, adaptive threshold, and deskew processing.
-- `backend/app/pipeline/steps/segmenter.py` implements ONNX Runtime semantic segmentation plus a Classic CV fallback.
-- `backend/app/pipeline/primitives.py` defines typed CAD primitives (`WallPrimitive`, `OpeningPrimitive`, `RoomPrimitive`, `TextPrimitive`).
-- `backend/app/pipeline/steps/vectorizer.py` converts masks into simplified CAD primitives and reports the 80% milestone.
-- `backend/app/pipeline/steps/dxf_writer.py` writes `WALLS`, `DOORS`, `WINDOWS`, `ROOMS`, and `TEXT` layers to DXF (plus `WALLS_3D` / `SLABS` 3DFACE geometry for 3D jobs) and reports the 95% milestone.
-- `backend/app/pipeline/steps/extruder.py` (`WallExtruderStep`) extrudes walls into 3D prisms and adds floor/ceiling slabs, reporting the 85% milestone.
-- `backend/app/pipeline/steps/glb_writer.py` (`GlbWriterStep`) exports a self-contained GLB (binary glTF) via `trimesh` for 3D jobs.
-- `backend/app/pipeline/steps/dwg_converter.py` (`DwgConverterStep`) converts DXF output into DWG through an operator-configured libredwg/ODA command.
-- `backend/app/pipeline/orchestrator.py` provides `Pipeline.run()` for ordered step execution.
-- `backend/app/pipeline/progress.py` provides Redis Pub/Sub progress publishing.
-
-### 8.2 Observer / Pub-Sub — Progress Reporting
-
-Workers publish progress events to **Redis Pub/Sub**. The FastAPI SSE endpoint subscribes and forwards events to the browser. This decouples the worker from the web layer and lets multiple workers report independently.
-
-```python
-# Worker
-redis.publish(f"job:{job_id}", json.dumps({"progress": 42, "step": "vectorization"}))
-
-# API SSE endpoint
-async def stream(job_id: str):
-    async with redis.pubsub() as pubsub:
-        await pubsub.subscribe(f"job:{job_id}")
-        async for message in pubsub.listen():
-            yield f"data: {message['data']}\n\n"
-```
-
-### 8.3 Repository — Data Access
-
-All DB operations go through `JobRepository` for testability and future storage swaps.
-
-```python
-class JobRepository(Protocol):
-    async def create(self, job: Job) -> Job: ...
-    async def get(self, job_id: UUID) -> Job | None: ...
-    async def list(self, *, status: str | None = None, limit: int = 50) -> list[Job]: ...
-    async def update_progress(self, job_id: UUID, progress: int, step: str) -> None: ...
-```
-
-### 8.4 Adapter — File Storage
-
-`StorageBackend` abstract class with `LocalStorage` and `S3Storage` implementations. Selected via env variable — no application code changes to switch backends.
-
-### 8.5 Functional Pipeline — Data Flow
-
-The pipeline is a composed chain of steps. Each step is a pure function of the context.
-
-```python
-result = Pipeline([
-    PdfParserStep(),
-    OpenCVPreprocessor(gaussian_kernel=(7, 7)),
-    SegmenterStep(),  # config: {"segmenter": "ml" | "classic"}
-    VectorizerStep(simplification_epsilon=2.0),
-    WallExtruder(default_height_m=3.0),     # only in 3D mode
-    DxfWriterStep(),
-    DwgConverterStep(),              # if output_format is "dwg" or "both"
-]).run(context)
-```
-
----
-
-## 9. Key Trade-Offs
-
-| Decision                               | Trade-Off                                                                                                         | Mitigation                                                                                                                  |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Python over Node.js backend**        | Better CV/ML libraries, but polyglot stack.                                                                       | Clear REST contract; types mirrored in TS.                                                                                  |
-| **DXF primary, DWG secondary**         | Native DWG generation requires commercial ODA libs or unreliable open-source tools.                               | Offer ODA `FileConverter` as opt-in Docker step; most CAD software imports DXF perfectly.                                   |
-| **ML segmentation vs. traditional CV** | ML is more accurate on diverse drawings but needs GPU-friendly inference, model hosting, and periodic retraining. | Start with pre-trained model (e.g. trained on CubiCasa5K). Provide a "basic" OpenCV-only fallback for simple line drawings. |
-| **Async (Celery) over synchronous**    | Adds Redis + worker complexity.                                                                                   | Non-negotiable: conversions take 30s–5min and would timeout HTTP. Worker count scales horizontally.                         |
-| **SSE over WebSocket**                 | SSE is unidirectional and slightly less flexible.                                                                 | Sufficient for progress updates. WebSocket reserved for future live-edit features.                                          |
-| **ONNX Runtime over PyTorch**          | Lighter weight and CPU-friendly for inference.                                                                    | PyTorch reserved for training/fine-tuning in offline pipelines.                                                             |
-
----
-
-## 10. Implementation Phases
-
-### Phase 1 — Scaffolding & Upload Flow (MVP skeleton) ✅ Complete
-
-- [x] Docker Compose with all 5 services (frontend, backend, worker, postgres, redis)
-- [x] File upload endpoint (`POST /api/v1/jobs`) + Next.js drag-and-drop (DropZone)
-- [x] Job creation in DB (PostgreSQL via SQLAlchemy + Alembic), PDF stored locally
-- [x] Placeholder Celery pipeline that simulates conversion with progress updates
-- [x] SSE progress streaming (`GET /api/v1/jobs/{id}/stream`) via Redis Pub/Sub
-- [x] Frontend job detail page with live ProgressTracker
-- [x] Conversion options UI (2D/3D, DPI, floor height, output format)
-
-### Phase 2 — PDF Parsing & Preprocessing
-
-- [x] Pluggable backend pipeline framework (`PipelineContext`, `PipelineStep`, `Pipeline.run()`)
-- [x] Redis Pub/Sub progress publisher for pipeline steps
-- [x] PyMuPDF integration → extract pages as configurable-DPI PNG images
-- [x] OpenCV preprocessing pipeline (grayscale, Gaussian blur, adaptive threshold, deskew)
-- [x] Page preview in frontend (horizontal thumbnail strip with click-to-enlarge modal)
-
-### Phase 3 — 2D Vectorization (core value)
-
-- [x] Integrate semantic segmentation with CPU ONNX Runtime and Classic CV fallback
-- [x] Cache/download ONNX weights in the `models/` volume when configured
-- [x] Vectorize detected walls/doors/windows/rooms/text into CAD primitives
-- [x] Generate layered DXF output with `ezdxf`
-- [x] Downloadable DXF output appears when jobs complete
-
-### Phase 4 — 3D Extrusion
-
-- [x] Extrude walls into rectangular prisms by configurable floor height (default 3.0m)
-- [x] Add floor slabs (and optional ceiling slab) from detected room polygons
-- [x] Export 3D DXF (`3DFACE` / `POLYLINE 3D` on `WALLS_3D` / `SLABS` layers)
-- [x] Export a self-contained GLB (binary glTF) via `trimesh`
-- [x] In-browser 3D preview (`three` / `@react-three/fiber`) with orbit controls and wireframe/solid toggle
-- [x] `?format=glb` download endpoint for the 3D model
-
-### Phase 5 — Polish & DWG Export
-
-- [x] DWG conversion hook via external `libredwg` (`dwgwrite`) or ODA `FileConverter` command
-- [x] User-selectable output format: DXF, DWG, or both; 3D jobs still emit GLB for preview/download
-- [x] History page with status filtering, newest-first ordering, reopen links, and delete confirmation
-- [x] Robust error handling: global FastAPI fallback, failed-job `error_msg` + `error_trace`, and worker retries with exponential backoff
-- [x] Retry action re-enqueues failed jobs with the same uploaded file and config
-- [x] Daily Celery Beat cleanup archives jobs and removes storage files after the configured 7-day TTL
-
----
-
-## 11. Python Dependencies (Key Libraries)
-
-```text
-# backend/requirements.txt (implemented)
-fastapi==0.115.*
-uvicorn[standard]==0.34.*
-celery[redis]==5.*
-sqlalchemy[asyncio]==2.*
-asyncpg==0.30.*
-pydantic-settings==2.*
-python-multipart==0.0.*  # file uploads
-alembic==1.*              # migrations
-redis==5.*               # Celery broker + Pub/Sub
-pymupdf==1.*             # PDF page rendering
-onnxruntime==1.*         # CPU ML segmentation inference
-ezdxf==1.*              # DXF generation and validation
-trimesh==4.*            # 3D mesh construction + GLB (binary glTF) export
-shapely==2.*            # polygon geometry for slab/wall extrusion
-manifold3d==3.*         # robust mesh boolean/extrusion backend for trimesh
-sse-starlette==2.*       # SSE streaming
-ruff==0.8.*              # linting
-mypy==1.*                # type checking
-pre-commit==4.*          # local Git quality gates
-pytest==8.*              # testing
-pytest-asyncio==0.24.*
-httpx==0.28.*            # test client
-
-# Phase 2 image preprocessing
-opencv-python-headless==4.*
-numpy==2.*
-
-# Optional Phase 5 system/sidecar dependency
-# libredwg `dwgwrite` or ODA FileConverter  # configured via DWG_CONVERTER_COMMAND
-# torch + ultralytics       # training / fine-tuning
-```
-
-```jsonc
-// frontend/package.json (key dependencies)
-{
-  "dependencies": {
-    "next": "^14.2.0",
-    "react": "^18.3.0",
-    "typescript": "^5.4.0",
-    "tailwindcss": "^3.4.0",
-    "react-dropzone": "^14.2.0",
-    "sonner": "^1.4.0",
-    "zod": "^3.23.0",
-    "three": "^0.169.0",
-    "@react-three/fiber": "^8.17.0",
-    "@react-three/drei": "^9.114.0",
-  },
-}
-```
-
----
-
-## 12. Local Development (Quick Start)
-
-The root `Makefile` is the preferred entrypoint for starting and stopping the
-stack. It supports both all-Docker workflows and a hybrid local development
-workflow where FastAPI/Next.js run on your machine while PostgreSQL, Redis, and
-the Celery worker run in Docker. It auto-detects either `docker compose` or the
-legacy `docker-compose` binary.
+# DrawLift
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](./backend/.python-version)
+[![Typescript](https://img.shields.io/badge/typescript-5.4.0-blue.svg)](./frontend/package.json)
+[![Next.js](https://img.shields.io/badge/frontend-Next.js-black.svg)](./frontend)
+[![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)](./backend)
+[![CI](https://github.com/Josh-Uvi/DrawLift/actions/workflows/ci.yml/badge.svg)](https://github.com/Josh-Uvi/DrawLift/actions/workflows/ci.yml)
+
+> Convert architectural PDF drawings into editable CAD outputs with a FastAPI/Celery conversion pipeline and a Next.js upload, preview, history, and download UI.
+
+DrawLift is a proof-of-concept full-stack application for PDF-to-CAD conversion. Users upload architectural drawings, choose 2D or 3D options, watch progress over Server-Sent Events, preview extracted pages and generated GLB models, then download DXF, optional DWG, or GLB artifacts.
+
+The project is intentionally scoped as a realistic local/dev stack: Next.js frontend, FastAPI API, Celery worker, Redis, PostgreSQL, local file storage, and an operator-supplied DWG converter command when true DWG output is required.
+
+## Table of Contents
+
+- [Security](#security)
+- [Background](#background)
+- [Install](#install)
+- [Usage](#usage)
+- [API](#api)
+- [Documentation](#documentation)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Contributing](#contributing)
+
+## Security
+
+Do not expose this proof-of-concept directly to untrusted public traffic without adding authentication, quota controls, malware scanning, and production storage hardening.
+
+Current protections include PDF extension/MIME validation, Pydantic config validation, safe page-image path resolution, generated-file download checks, CORS configuration, environment-based secrets, and cleanup of expired job files. See [docs/security.md](./docs/security.md) for the scoped security model, risks, and recommended production controls.
+
+## Background
+
+Architectural PDF drawings often arrive as rasterized plans or mixed vector/raster documents. Turning those drawings into usable CAD is a multi-step process:
+
+1. Render PDF pages into images.
+2. Clean and normalize image data.
+3. Segment walls, doors, windows, rooms, and text.
+4. Vectorize detected features into CAD primitives.
+5. Export layered DXF, optionally generate 3D geometry and GLB, and optionally convert DXF to DWG.
+
+DrawLift separates the interactive web workflow from CPU-heavy conversion work. FastAPI handles validation, job metadata, file serving, and SSE. Celery runs the conversion pipeline out of band so long-running conversions do not block HTTP requests.
+
+## Install
+
+### Requirements
+
+- Docker and Docker Compose
+- Python 3.11 for host backend development
+- Node.js and npm for host frontend development
+- Optional: `libredwg`/`dwgwrite` or ODA FileConverter for true DWG output
+
+### Configure
 
 ```bash
-# 1. Clone & configure
 cp .env.example .env
+```
 
-# 2A. Boot everything with Docker (local test or production-like)
+The default Docker Compose stack uses PostgreSQL, Redis, local storage volumes, and `NEXT_PUBLIC_API_URL=http://localhost:8000`.
+
+### All-Docker quick start
+
+```bash
 make docker-up
 make docker-migrate
-
-# 2B. Or use hybrid local development
-# Runs frontend/backend on the host and postgres/redis/worker in Docker.
-make local-up
-
-# 3. Open the app
-open http://localhost:3000      # Frontend (Next.js)
-open http://localhost:8000/api/v1/health  # Backend health check
+open http://localhost:3000
 ```
 
-### Make service management
+Useful endpoints:
 
-Run `make help` to list all available targets. Common all-service commands are:
+- Frontend: <http://localhost:3000\>
+- Backend health: <http://localhost:8000/api/v1/health\>
+- OpenAPI docs: <http://localhost:8000/docs\>
 
-| Command              | Description                                                                    |
-| -------------------- | ------------------------------------------------------------------------------ |
-| `make docker-up`     | Build and start frontend, backend, worker, beat, PostgreSQL, and Redis.        |
-| `make docker-up-dev` | Alias for all-Docker local development/test startup.                           |
-| `make docker-up-prod`| Alias for all-Docker production-like startup.                                  |
-| `make docker-down`   | Stop and remove the Docker Compose stack.                                      |
-| `make docker-up-dwg` | Start the Docker stack plus the optional DWG converter profile.                |
-| `make local-up`      | Start hybrid local dev: host frontend/backend + Docker postgres/redis/worker. |
-| `make local-down`    | Stop hybrid local dev services.                                                |
-| `make up`            | Alias for `make local-up`.                                                     |
-| `make down`          | Alias for `make local-down`.                                                   |
+### Hybrid local development
 
-Service-specific Docker targets are available for each Compose service:
-
-```bash
-make docker-up-postgres
-make docker-up-redis
-make docker-up-backend
-make docker-up-worker
-make docker-up-beat
-make docker-up-frontend
-
-make docker-stop-backend
-make docker-stop-frontend
-make docker-stop-service SERVICE=redis
-```
-
-Hybrid local development keeps source hot-reload fast by running the app servers
-on your machine, while infrastructure and the conversion worker remain in Docker:
-
-```bash
-make local-up-postgres       # Docker PostgreSQL
-make local-up-redis          # Docker Redis
-make local-up-worker         # Docker Celery worker
-make local-up-backend        # Host FastAPI via backend/.venv
-make local-up-frontend       # Host Next.js dev server
-make local-up-beat           # Optional Docker Celery Beat cleanup scheduler
-
-make local-down-backend
-make local-down-worker
-make local-down-beat
-make local-down-frontend
-make local-status
-make logs-backend
-make logs-worker
-```
-
-The hybrid workflow expects backend dependencies in `backend/.venv` and frontend
-dependencies in `frontend/node_modules`:
+Run PostgreSQL, Redis, and the worker in Docker while running FastAPI and Next.js on the host:
 
 ```bash
 cd backend
@@ -567,168 +84,139 @@ pip install -r requirements.txt
 
 cd ../frontend
 npm install
+
+cd ..
+make local-up
 ```
 
-`make local-up` bind-mounts `./backend/storage` and `./backend/models` into the
-Docker worker so files written by the host FastAPI process are visible to the
-worker. The hybrid worker uses relative `STORAGE_PATH=storage` /
-`MODELS_PATH=models` inside the backend container so completed job paths remain
-portable back to the host API. Override the bind-mounted host paths if needed
-with `LOCAL_STORAGE_DIR` or `LOCAL_MODELS_DIR`.
-
-Useful overrides:
+Stop services with:
 
 ```bash
-make docker-up COMPOSE=docker-compose
-make local-up LOCAL_STORAGE_DIR=./storage LOCAL_MODELS_DIR=./models
-make local-up LOCAL_BACKEND_PORT=8010 LOCAL_FRONTEND_PORT=3010
+make local-down
 ```
 
-### Services
+## Usage
 
-| Service       | Port | Description                                                           |
-| ------------- | ---- | --------------------------------------------------------------------- |
-| Frontend      | 3000 | Next.js 14 App Router                                                 |
-| FastAPI       | 8000 | Backend API + SSE streaming                                           |
-| PostgreSQL    | 5432 | Job metadata database                                                 |
-| Redis         | 6379 | Celery broker + Pub/Sub for SSE                                       |
-| Worker        | —    | Celery worker (shares backend image)                                  |
-| Beat          | —    | Daily cleanup scheduler for expired job files                         |
-| DWG Converter | —    | Optional `--profile dwg` placeholder for mounted libredwg/ODA tooling |
+1. Open <http://localhost:3000\>.
+2. Drop or select a PDF file.
+3. Choose conversion options:
+   - `mode`: `2d` or `3d`
+   - `dpi`: render resolution, constrained by backend validation
+   - `floor_height_m`, `slab_thickness_m`, and `include_ceiling` for 3D jobs
+   - `output_format`: `dxf`, `dwg`, or `both`
+   - `segmenter`: `classic` or `ml`
+4. Submit the job and watch progress on `/jobs/{id}`.
+5. Preview extracted page images and, for 3D jobs, the GLB model.
+6. Download available outputs after completion.
+7. Use `/history` to filter, reopen, retry failed jobs, or delete jobs.
 
-### Optional DWG conversion setup
+### Optional DWG conversion
 
-DWG is proprietary, so the application does not bundle converter binaries.
-Install libredwg's `dwgwrite`, mount ODA FileConverter in a sidecar/shared volume,
-or set an explicit command template:
+DWG is proprietary, so DrawLift does not bundle converter binaries. Configure an external converter command when needed:
 
 ```bash
 DWG_CONVERTER_COMMAND='dwgwrite {input} {output}' make docker-up
 ```
 
-Supported placeholders are `{input}`, `{output}`, `{input_dir}`, `{output_dir}`, and `{stem}`.
-
-### Linting & Tests
+Supported placeholders are `{input}`, `{output}`, `{input_dir}`, `{output_dir}`, and `{stem}`. The optional Compose profile can be started with:
 
 ```bash
-# Backend
+make docker-up-dwg
+```
+
+## API
+
+Base path: `/api/v1`.
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness/readiness check. |
+| `POST` | `/jobs` | Upload a PDF and JSON config as multipart form data. |
+| `GET` | `/jobs` | List jobs, newest first, with pagination and optional status filtering. |
+| `GET` | `/jobs/{job_id}` | Fetch status, progress, config, timestamps, errors, and page count. |
+| `GET` | `/jobs/{job_id}/stream` | Server-Sent Events progress stream backed by Redis Pub/Sub. |
+| `GET` | `/jobs/{job_id}/pages/{page_number}` | Serve an extracted page PNG. |
+| `GET` | `/jobs/{job_id}/download?format=dxf\|dwg\|glb` | Download completed outputs. |
+| `POST` | `/jobs/{job_id}/retry` | Re-enqueue a failed job with its stored input/config. |
+| `DELETE` | `/jobs/{job_id}` | Delete job metadata and local job files. |
+
+Example upload:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/jobs \
+  -F 'file=@floorplan.pdf;type=application/pdf' \
+  -F 'config={"mode":"3d","dpi":300,"floor_height_m":3.0,"output_format":"both","segmenter":"classic"}'
+```
+
+See [docs/api.md](./docs/api.md) for payloads, status semantics, and edge cases.
+
+## Documentation
+
+Important content from the previous README, TODO, and implementation plan has been split into focused documents:
+
+- [Architecture](./docs/architecture.md) — system boundaries, diagrams, data flow, job lifecycle.
+- [API](./docs/api.md) — REST/SSE contract and examples.
+- [Pipeline](./docs/pipeline.md) — conversion stages, config, outputs, and edge cases.
+- [Design system](./docs/design-system.md) — frontend conventions, tokens, shared components, accessibility.
+- [Security](./docs/security.md) — scoped controls, concerns, and production hardening.
+- [Trade-offs and alternatives](./docs/trade-offs-and-alternatives.md) — decision log and alternatives considered.
+- [Risks and edge cases](./docs/risks-and-edge-cases.md) — realistic operational and product risks.
+- [Operations](./docs/operations.md) — setup, service management, tests, migrations, cleanup.
+- [Roadmap](./docs/roadmap.md) — distilled project stages from `TODO.md` and implementation plan.
+
+`TODO.md` remains the detailed issue-tracking source of truth for user stories and historical progress.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[Next.js frontend] -->|REST upload/status| API[FastAPI API]
+  UI -->|SSE progress| API
+  API -->|metadata| DB[(PostgreSQL)]
+  API -->|enqueue| Redis[(Redis broker/pubsub)]
+  Worker[Celery worker] -->|consume jobs| Redis
+  Worker -->|read/write status| DB
+  Worker -->|PDF/pages/DXF/DWG/GLB| Storage[(Local storage volume)]
+  API -->|serve pages/downloads| Storage
+```
+
+The worker composes pluggable pipeline steps: PDF parsing, preprocessing, segmentation, vectorization, optional extrusion, DXF writing, optional GLB writing, and optional DWG conversion.
+
+## Development
+
+Common quality checks:
+
+```bash
 cd backend
-ruff check .          # linting
-ruff format --check . # formatting check
-mypy app/             # type checking
-pytest                # tests
+ruff check .
+ruff format --check .
+mypy app/
+pytest
 
-# Frontend
-cd frontend
-npm run lint          # ESLint
-npm run format:check  # Prettier formatting check
-npm run build         # production build
+cd ../frontend
+npm run lint
+npm run format:check
+npm run build
 ```
 
-### Pre-commit hooks
-
-Install the Git pre-commit hook after setting up the backend and frontend dependencies:
+Root service commands:
 
 ```bash
-pip install -r backend/requirements.txt
-cd frontend && npm install && cd ..
-pre-commit install
+make help
+make docker-up
+make docker-down
+make local-up
+make local-status
+make logs-worker
 ```
 
-Run the full hook suite manually with:
+## Contributing
 
-```bash
-pre-commit run --all-files
-```
+Issues, branches, and PRs are managed in GitHub. Use the user-story and issue conventions documented in [TODO.md](./docs/TODO.md) and the delivery summary in [docs/roadmap.md](./docs/roadmap.md).
 
-The hook runs backend Ruff lint/format checks, backend mypy, frontend ESLint, and frontend Prettier checks before each commit.
+Before opening a PR:
 
----
-
-## 13. Project & Issue Management (GitHub)
-
-All implementation work is tracked as **GitHub Issues** on this repository. We use two equivalent mechanisms:
-
-- **[GitHub CLI](https://cli.github.com/)** (`gh`) — terminal-native scripting & automation
-- **GitHub MCP server** — for AI agents like Cline, Claude Desktop, and Cursor
-
-No Linear, Jira, or other third-party trackers are required.
-
-### Concept Mapping
-
-| This document                   | GitHub                                                                     |
-| ------------------------------- | -------------------------------------------------------------------------- |
-| **Stage** (0–5)                 | **Milestone** (one per stage, with due date)                               |
-| **Epic** (e.g. 1.1)             | **Label** (`epic:p1-scaffold`, etc.)                                       |
-| **User Story** (US-001 …)       | **Issue** with title prefix `[US-001]`                                     |
-| **Acceptance Criteria / Tasks** | **Markdown checkboxes** in the issue body                                  |
-| **Priority** (P0–P3)            | **Label** `priority:p0` … `priority:p3`                                    |
-| **Area / Type**                 | **Labels** `area:backend`, `type:feature`, etc.                            |
-| **Status**                      | **Project board column** (Backlog → Todo → In Progress → In Review → Done) |
-| **Sprint / Cycle**              | **GitHub Project iteration** or **Milestone due date**                     |
-
-### Quick Start with the `gh` CLI
-
-```bash
-# 1. Install & authenticate
-brew install gh
-gh auth login
-
-# 2. One-shot bootstrap: create labels + milestones
-bash scripts/bootstrap-github.sh    # generated from TODO.md §A.3
-
-# 3. Create one issue per user story (28 total)
-bash scripts/create-issues.sh       # generated from TODO.md §A.4
-
-# 4. Daily flow
-gh issue list --assignee @me --state open
-gh pr create --title "[US-001] Monorepo layout" --body "Closes #12"
-```
-
-### Using the GitHub MCP Server (from an AI agent)
-
-When Cline or another MCP-enabled client has the GitHub MCP server connected, the same operations are available as tool calls:
-
-| Action             | MCP tool                                                        |
-| ------------------ | --------------------------------------------------------------- |
-| Create issue       | `mcp_github_create_issue({ title, body, labels, milestone })`   |
-| List my issues     | `mcp_github_list_issues({ assignee: "me", state: "open" })`     |
-| Comment / progress | `mcp_github_add_issue_comment({ issue_number, body })`          |
-| Update state       | `mcp_github_update_issue({ issue_number, labels, state })`      |
-| Create PR          | `mcp_github_create_pull_request({ title, body, head, base })`   |
-| Search code        | `mcp_github_search_code({ q: "repo:owner/name PipelineStep" })` |
-
-### Branch & PR Auto-Linking
-
-GitHub auto-links branches and PRs when the issue number appears in the branch name or PR title.
-
-```bash
-# Branch pattern
-git checkout -b feat/12-monorepo-layout
-
-# PR title pattern (auto-closes the issue on merge)
-gh pr create --title "[US-001] Monorepo layout" --body "Closes #12"
-```
-
-### Detailed Reference
-
-See [TODO.md §A](./TODO.md) for the full GitHub issue management playbook, including:
-
-- Complete label / milestone bootstrap script
-- Bulk issue creation from `TODO.md`
-- Project board setup
-- AI-agent MCP workflows
-
----
-
-## 14. Open Questions & Future Considerations
-
-- **Authentication** — Currently single-user. Add JWT-based auth + per-user job isolation when multi-tenancy is needed.
-- **Model fine-tuning** — Plan a feedback loop where users can mark a conversion as "good/bad" to gather training data.
-- **GPU support** — Optional `docker-compose.gpu.yml` for CUDA-enabled inference.
-- **IFC export** — For full BIM interoperability, add an IFC writer alongside DXF/DWG.
-- **Cloud-native deployment** — Replace Celery with AWS SQS + Lambda, or Kubernetes Jobs, for elastic scaling.
-
----
-
-_Document version 1.0 — updated to reflect Phase 5 production polish and root Makefile service management: DWG conversion command integration, DXF/DWG/both selection, history and delete UI, failed-job retry, stored stack traces, daily cleanup, archived jobs, and one-command Docker/local startup and shutdown._
+1. Keep changes scoped to one issue or concern.
+2. Run relevant backend/frontend checks.
+3. Update docs when behavior, commands, API payloads, or trade-offs change.
+4. Reference the GitHub issue in the branch name or PR body where applicable.
