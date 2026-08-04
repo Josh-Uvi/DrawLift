@@ -121,7 +121,8 @@ def portable_storage_path(path: Path | None) -> str | None:
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_jitter=True,
-    max_retries=3,
+    max_retries=1,
+    retry_kwargs={"max_retries": 1, "max_seconds": 30},
 )
 def process_job(_self: object, job_id: str, config: dict[str, Any]) -> str:
     """Run the real conversion pipeline and persist job progress.

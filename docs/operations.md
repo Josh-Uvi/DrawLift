@@ -19,6 +19,7 @@ Important variables:
 | `STORAGE_PATH` | Root for uploaded/generated files. |
 | `STORAGE_TTL_DAYS` | Cleanup/archive threshold. |
 | `MODELS_PATH` | ONNX/model cache directory. |
+| `SEGMENTER_MODEL_INPUT_SIZE` | ONNX model input resolution side length in pixels (default `128`). Lower = less memory. |
 | `DWG_CONVERTER_COMMAND` | Optional external DWG conversion command template. |
 | `CORS_ORIGINS` | Allowed frontend origins. |
 | `NEXT_PUBLIC_API_URL` | Browser-visible API base URL. |

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     MODELS_PATH: str = "./models"
     SEGMENTER_MODEL_PATH: str | None = None
     SEGMENTER_MODEL_URL: str | None = None
+    SEGMENTER_MODEL_INPUT_SIZE: int = 128
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
