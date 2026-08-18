@@ -39,8 +39,7 @@ def _mark_job_failed_on_task_failure(
     consistent (each retry also gets killed).  With ``task_acks_late=False``
     the task is acknowledged immediately; if the worker dies the task is lost
     from the queue but the ``task_failure`` signal still fires and this handler
-    marks the job as 'failed'.  Task-level exceptions (raised inside the task
-    function) are still retried via ``autoretry_for`` / ``max_retries``.
+    marks the job as 'failed'.
     """
     import asyncio
     import logging
@@ -48,7 +47,7 @@ def _mark_job_failed_on_task_failure(
 
     from sqlalchemy import select
 
-    from app.core.database import async_session
+    from app.core.database import async_session, engine
     from app.models.job import Job
 
     logger = logging.getLogger(__name__)
@@ -83,7 +82,13 @@ def _mark_job_failed_on_task_failure(
                     type(exception).__name__,
                 )
 
-    asyncio.run(_mark_failed())
+    async def _mark_failed_and_dispose() -> None:
+        try:
+            await _mark_failed()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(_mark_failed_and_dispose())
 
 
 def einfo_repr(einfo: object) -> str:
@@ -100,17 +105,24 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     result_expires=3600,
-    # Re-queue tasks if the worker process is killed (e.g. OOM SIGKILL) so
-    # they can be retried on a fresh worker instead of being lost forever.
-    task_acks_late=True,
-    task_reject_on_worker_lost=True,
+    # Acknowledge conversion tasks before execution.  When a child process is
+    # OOM-killed, late acknowledgements + reject_on_worker_lost requeue the same
+    # deterministic memory-heavy job forever.  The task_failure signal above is
+    # the recovery path that marks the DB job failed after WorkerLostError.
+    task_acks_late=False,
+    task_reject_on_worker_lost=False,
+    # Conversion is CPU/memory intensive; only reserve and run one job per worker
+    # process to keep the 4 GiB compose memory limit from being multiplied by the
+    # host CPU count.
+    worker_concurrency=1,
+    worker_prefetch_multiplier=1,
     # Hard / soft time limits prevent hung tasks from blocking a worker.
     task_time_limit=600,
     task_soft_time_limit=540,
     # Recycle worker child processes before they hit the container OOM limit.
-    # 3 GiB leaves headroom under the 4 GiB mem_limit configured in
-    # docker-compose.yml for the ONNX model + image processing pipeline.
-    worker_max_memory_per_child=3 * 1024 * 1024 * 1024,
+    # Celery expects this value in KiB, not bytes.  3 GiB leaves headroom under
+    # the 4 GiB mem_limit configured in docker-compose.yml.
+    worker_max_memory_per_child=3 * 1024 * 1024,
     beat_schedule={
         "cleanup-expired-jobs-daily": {
             "task": "app.tasks.cleanup.cleanup_expired_jobs",

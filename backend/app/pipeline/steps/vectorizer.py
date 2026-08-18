@@ -69,6 +69,10 @@ class VectorizerStep(PipelineStep):
             primitives.extend(self._vectorize_text(context.masks["text"][page_index], page_number))
 
         context.primitives = primitives
+        # Output writers operate on primitives only. Release full-resolution mask
+        # arrays as soon as they have been vectorized to reduce peak RSS before
+        # DXF/GLB generation.
+        context.masks = {}
         context.metadata["primitive_count"] = len(primitives)
         context.metadata["primitive_counts_by_kind"] = _count_by_kind(primitives)
 
@@ -225,13 +229,18 @@ def _detect_hough_lines(mask: np.ndarray) -> list[tuple[int, int, int, int]]:
     """Detect dominant wall centerlines using probabilistic Hough transforms."""
     edges = cv2.Canny(mask, 50, 150)
     min_dimension = max(1, min(mask.shape[:2]))
-    lines = cv2.HoughLinesP(
-        edges,
-        rho=1,
-        theta=np.pi / 180,
-        threshold=max(10, min_dimension // 12),
-        minLineLength=max(8, min_dimension // 10),
-        maxLineGap=8,
+    # OpenCV returns None when no probabilistic Hough lines are detected, but
+    # the bundled type hints do not model that nullable runtime behavior.
+    lines = cast(
+        np.ndarray | None,
+        cv2.HoughLinesP(
+            edges,
+            rho=1,
+            theta=np.pi / 180,
+            threshold=max(10, min_dimension // 12),
+            minLineLength=max(8, min_dimension // 10),
+            maxLineGap=8,
+        ),
     )
     if lines is None:
         return []

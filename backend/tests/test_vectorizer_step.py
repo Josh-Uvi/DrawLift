@@ -86,6 +86,7 @@ def test_vectorizer_converts_masks_to_cad_primitives(tmp_path: Path) -> None:
     assert counts["window"] == 1
     assert counts["room"] == 1
     assert counts["text"] == 1
+    assert result.masks == {}
 
 
 def test_vectorizer_simplifies_room_polygons(tmp_path: Path) -> None:

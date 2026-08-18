@@ -282,6 +282,10 @@ class SegmenterStep(PipelineStep):
         mask_paths = self._save_masks(masks, output_dir)
 
         context.masks = masks
+        # Downstream vectorization only needs masks. Drop page-sized arrays from
+        # preprocessing now so multi-page jobs do not retain both images and all
+        # semantic masks at the same time for the rest of the pipeline.
+        context.preprocessed = []
         context.metadata["segmenter"] = selected_segmenter
         context.metadata["segmentation_labels"] = list(MASK_LABELS)
         context.metadata["segmentation_count"] = len(images)
@@ -352,12 +356,23 @@ def _download_model(model_url: str, destination: Path) -> None:
     urlretrieve(model_url, destination)
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=1)
 def _get_onnx_session(model_path: str):
     """Return a cached CPU ONNX Runtime session for the given model path."""
     import onnxruntime as ort
 
-    return ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+    session_options: ort.SessionOptions = ort.SessionOptions()
+    session_options.intra_op_num_threads = 1
+    session_options.inter_op_num_threads = 1
+    session_options.graph_optimization_level = cast(
+        ort.GraphOptimizationLevel,
+        ort.GraphOptimizationLevel.ORT_ENABLE_ALL,
+    )
+    return ort.InferenceSession(
+        model_path,
+        sess_options=session_options,
+        providers=["CPUExecutionProvider"],
+    )
 
 
 def _to_grayscale(image: np.ndarray) -> np.ndarray:

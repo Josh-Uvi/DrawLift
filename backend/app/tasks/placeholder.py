@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.core.database import async_session
+from app.core.database import async_session, engine
 from app.models.job import Job
 from app.pipeline import (
     DwgConverterStep,
@@ -119,6 +119,7 @@ def portable_storage_path(path: Path | None) -> str | None:
     bind=True,
     name="app.tasks.placeholder.process_job",
     autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError,),
     retry_backoff=True,
     retry_jitter=True,
     max_retries=1,
@@ -134,7 +135,23 @@ def process_job(_self: object, job_id: str, config: dict[str, Any]) -> str:
     Returns:
         "completed" on success.
     """
-    return asyncio.run(_process_job_async(job_id, config))
+    return asyncio.run(_process_job_and_dispose_engine(job_id, config))
+
+
+async def _process_job_and_dispose_engine(job_id: str, config: dict[str, Any]) -> str:
+    """Run a job and close asyncpg connections before Celery closes the loop.
+
+    Celery tasks are synchronous, so this module uses ``asyncio.run`` for the
+    async SQLAlchemy code.  SQLAlchemy's asyncpg connections are bound to the
+    event loop that created them; keeping pooled connections after
+    ``asyncio.run`` closes that loop can make a later task fail with
+    ``Future attached to a different loop``.  Disposing the engine in the same
+    loop prevents stale asyncpg connections from crossing task boundaries.
+    """
+    try:
+        return await _process_job_async(job_id, config)
+    finally:
+        await engine.dispose()
 
 
 async def _process_job_async(job_id: str, config: dict[str, Any]) -> str:

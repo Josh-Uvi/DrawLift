@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+# cspell:ignore fitz
 import fitz
 
 from app.pipeline.context import PipelineContext
@@ -12,6 +13,7 @@ from app.pipeline.steps.base import PipelineStep
 
 DEFAULT_DPI = 300
 PDF_POINTS_PER_INCH = 72
+DEFAULT_MAX_RENDERED_PAGE_SIDE_PX = 4096
 
 
 class PdfParserStep(PipelineStep):
@@ -27,16 +29,20 @@ class PdfParserStep(PipelineStep):
     def execute(self, context: PipelineContext) -> PipelineContext:
         """Extract all pages from ``context.input_path`` as PNGs."""
         dpi = self._resolve_dpi(context.config.get("dpi", DEFAULT_DPI))
+        max_side_px = self._resolve_max_side_px(
+            context.config.get("max_page_image_side_px", DEFAULT_MAX_RENDERED_PAGE_SIDE_PX)
+        )
         page_output_dir = self._resolve_output_dir(context)
         page_output_dir.mkdir(parents=True, exist_ok=True)
 
         page_images: list[Path] = []
         zoom = dpi / PDF_POINTS_PER_INCH
-        matrix = fitz.Matrix(zoom, zoom)
 
         with fitz.open(context.input_path) as document:
             for page_index in range(document.page_count):
                 page = document.load_page(page_index)
+                render_zoom = min(zoom, self._max_zoom_for_page(page, max_side_px))
+                matrix = fitz.Matrix(render_zoom, render_zoom)
                 pixmap = page.get_pixmap(matrix=matrix, alpha=False)
                 image_path = page_output_dir / f"page_{page_index + 1:04d}.png"
                 pixmap.save(image_path)
@@ -45,6 +51,7 @@ class PdfParserStep(PipelineStep):
         context.page_images = page_images
         context.metadata["page_count"] = len(page_images)
         context.metadata["pdf_dpi"] = dpi
+        context.metadata["pdf_max_rendered_page_side_px"] = max_side_px
         context.metadata["page_image_dir"] = page_output_dir
 
         self.publish_progress(
@@ -76,3 +83,21 @@ class PdfParserStep(PipelineStep):
         if dpi <= 0:
             raise ValueError("PDF parser DPI must be greater than zero")
         return dpi
+
+    @staticmethod
+    def _resolve_max_side_px(value: Any) -> int:
+        """Return the maximum rendered page side in pixels."""
+        try:
+            max_side_px = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("PDF parser max page side must be an integer") from exc
+
+        if max_side_px <= 0:
+            raise ValueError("PDF parser max page side must be greater than zero")
+        return max_side_px
+
+    @staticmethod
+    def _max_zoom_for_page(page: fitz.Page, max_side_px: int) -> float:
+        """Return the largest zoom that keeps a page render under the side cap."""
+        largest_side_points = max(float(page.rect.width), float(page.rect.height), 1.0)
+        return max_side_px / largest_side_points

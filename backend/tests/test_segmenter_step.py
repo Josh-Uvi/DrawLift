@@ -101,6 +101,7 @@ def test_classic_segmenter_returns_semantic_masks_and_saves_pngs(tmp_path: Path)
     assert result.metadata["segmenter"] == "classic"
     assert result.metadata["segmentation_count"] == 1
     assert result.metadata["segmentation_mask_dir"] == output_dir
+    assert result.preprocessed == []
 
     walls = result.masks["walls"][0]
     rooms = result.masks["rooms"][0]

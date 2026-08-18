@@ -11,4 +11,5 @@ _F = TypeVar("_F", bound=Callable[..., Any])
 class BaseSignal:
     def connect(self, fun: _F, **kwargs: Any) -> _F: ...
 
+task_failure: BaseSignal
 worker_process_init: BaseSignal

@@ -3,11 +3,28 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol, cast
 
-import fitz
+import fitz  # pyright: ignore[reportMissingTypeStubs]
 import pytest
 
 from app.pipeline import PdfParserStep, PipelineContext
+
+
+class PdfFixtureDocument(Protocol):
+    """Typed subset of the PyMuPDF document API used by test fixtures."""
+
+    def new_page(self, *, width: int, height: int) -> object:
+        """Add a blank page to the fixture document."""
+        ...
+
+    def save(self, filename: str | Path) -> None:
+        """Persist the fixture document to disk."""
+        ...
+
+    def close(self) -> None:
+        """Close the fixture document."""
+        ...
 
 
 class RecordingPublisher:
@@ -38,13 +55,20 @@ class RecordingPublisher:
 
 def create_sample_pdf(path: Path, *, pages: int = 1, size: tuple[int, int] = (72, 72)) -> Path:
     """Create a small PDF fixture with the requested number of pages."""
-    document = fitz.open()
-    for page_number in range(1, pages + 1):
-        page = document.new_page(width=size[0], height=size[1])
-        page.insert_text((10, 20), f"Page {page_number}")
+    document = cast(PdfFixtureDocument, fitz.open())
+    for _ in range(pages):
+        document.new_page(width=size[0], height=size[1])
     document.save(path)
     document.close()
     return path
+
+
+def read_png_size(path: Path) -> tuple[int, int]:
+    """Read PNG dimensions from the IHDR chunk header."""
+    header = path.read_bytes()[:24]
+    assert header.startswith(b"\x89PNG\r\n\x1a\n")
+    assert header[12:16] == b"IHDR"
+    return int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
 
 
 def test_pdf_parser_extracts_each_page_as_png(tmp_path: Path) -> None:
@@ -73,9 +97,27 @@ def test_pdf_parser_uses_configurable_dpi(tmp_path: Path) -> None:
 
     result = PdfParserStep(output_dir=tmp_path / "pages").execute(context)
 
-    pixmap = fitz.Pixmap(result.page_images[0])
-    assert pixmap.width == 144
-    assert pixmap.height == 144
+    width, height = read_png_size(result.page_images[0])
+    assert width == 144
+    assert height == 144
+
+
+def test_pdf_parser_caps_rendered_page_dimensions(tmp_path: Path) -> None:
+    """Large/high-DPI pages are downscaled to avoid worker OOM kills."""
+    input_pdf = create_sample_pdf(tmp_path / "floorplan.pdf", size=(1000, 500))
+    context = PipelineContext(
+        job_id="job-123",
+        input_path=input_pdf,
+        config={"dpi": 720, "max_page_image_side_px": 100},
+    )
+
+    result = PdfParserStep(output_dir=tmp_path / "pages").execute(context)
+
+    width, height = read_png_size(result.page_images[0])
+    assert width <= 100
+    assert height <= 100
+    assert result.metadata["pdf_dpi"] == 720
+    assert result.metadata["pdf_max_rendered_page_side_px"] == 100
 
 
 def test_pdf_parser_publishes_twenty_percent_progress(tmp_path: Path) -> None:
@@ -107,4 +149,17 @@ def test_pdf_parser_rejects_invalid_dpi(tmp_path: Path) -> None:
     context = PipelineContext(job_id="job-123", input_path=input_pdf, config={"dpi": 0})
 
     with pytest.raises(ValueError, match="greater than zero"):
+        PdfParserStep(output_dir=tmp_path / "pages").execute(context)
+
+
+def test_pdf_parser_rejects_invalid_max_page_side(tmp_path: Path) -> None:
+    """Invalid page-side caps fail fast with a clear validation error."""
+    input_pdf = create_sample_pdf(tmp_path / "floorplan.pdf")
+    context = PipelineContext(
+        job_id="job-123",
+        input_path=input_pdf,
+        config={"max_page_image_side_px": 0},
+    )
+
+    with pytest.raises(ValueError, match="max page side must be greater than zero"):
         PdfParserStep(output_dir=tmp_path / "pages").execute(context)

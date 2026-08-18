@@ -2,15 +2,27 @@
 
 ONNX Runtime does not ship a ``py.typed`` marker, so strict type checkers
 report missing stubs and partially unknown member types. These stubs cover
-only the ONNX Runtime surface used by this project (``InferenceSession``,
-``get_inputs``, ``run``). Extend them here if new ONNX Runtime APIs are
-introduced.
+only the ONNX Runtime surface used by this project (``SessionOptions``,
+``GraphOptimizationLevel``, ``InferenceSession``, ``get_inputs``, ``run``).
+Extend them here if new ONNX Runtime APIs are introduced.
 """
 
 from collections.abc import Sequence
+from enum import IntEnum
 from typing import Any
 
 import numpy as np
+
+class GraphOptimizationLevel(IntEnum):
+    ORT_DISABLE_ALL: int
+    ORT_ENABLE_BASIC: int
+    ORT_ENABLE_EXTENDED: int
+    ORT_ENABLE_ALL: int
+
+class SessionOptions:
+    intra_op_num_threads: int
+    inter_op_num_threads: int
+    graph_optimization_level: GraphOptimizationLevel
 
 class SessionInput:
     name: str
