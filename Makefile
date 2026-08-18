@@ -152,6 +152,22 @@ docker-migrate: check-compose ## Run Alembic migrations in the Docker backend se
 docker-up-dwg: check-compose ## Start default Docker services plus the optional DWG converter profile
 	$(COMPOSE) --profile dwg up -d --build $(DOCKER_SERVICES) dwg-converter
 
+.PHONY: download-model validate-model
+download-model: check-backend-venv ## Download/provision the ONNX segmentation model (optional MODEL_URL=<url>)
+	@mkdir -p "$(LOCAL_MODELS_DIR)"
+	@if [ -n "$(MODEL_URL)" ]; then \
+		cd backend && "$(BACKEND_BIN)/python" -m app.ml.download_model \
+			--models-dir "$(CURDIR)/$(LOCAL_MODELS_DIR)" --url "$(MODEL_URL)"; \
+	else \
+		cd backend && "$(BACKEND_BIN)/python" -m app.ml.download_model \
+			--models-dir "$(CURDIR)/$(LOCAL_MODELS_DIR)"; \
+	fi
+
+validate-model: check-backend-venv ## Validate the ONNX segmentation model against the US-029 contract
+	@cd backend && "$(BACKEND_BIN)/python" -m app.ml.download_model --check \
+		--models-dir "$(CURDIR)/$(LOCAL_MODELS_DIR)"
+
+
 .PHONY: docker-up-postgres docker-up-redis docker-up-backend docker-up-worker docker-up-beat docker-up-frontend docker-up-service
 docker-up-postgres docker-up-redis docker-up-backend docker-up-worker docker-up-beat docker-up-frontend: check-compose ## Start one Docker service (target suffix selects service)
 	$(COMPOSE) up -d --build $(subst docker-up-,,$@)
