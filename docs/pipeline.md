@@ -94,7 +94,7 @@ DXF outputs use domain-oriented layers such as:
 
 The `classic` segmenter uses thresholding, Canny edges, and probabilistic Hough line detection. It detects wall structures but emits zero-filled masks for doors, windows, and text. This means downstream vectorization and DXF output are structurally valid but semantically incomplete for real architectural drawings.
 
-The `ml` segmenter supports ONNX Runtime inference and will produce all five mask classes when a suitable model is configured. **No model file currently exists in `backend/models/`** and both `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are unset. See [Stage 6 in TODO.md](./TODO.md) for the model acquisition plan.
+The `ml` segmenter supports ONNX Runtime inference and produces all five mask classes when a suitable model is configured. `backend/models/semantic_segmenter.onnx` ships a small deterministic reference model (edge-energy segmentation expressed as ONNX ops) that satisfies the segmenter contract so the ML path works out of the box. Trained weights can replace it via `make download-model MODEL_URL=<url>` or `SEGMENTER_MODEL_URL`; every provisioned artifact is validated against the US-029 contract (CPU-only load, <100 MB, 5-class decodable output) by `app.ml.segmentation_model`. See [Stage 6 in TODO.md](./TODO.md) for the model acquisition plan.
 
 Recommended lightweight open-source models for floor-plan segmentation:
 
@@ -117,5 +117,5 @@ Recommended lightweight open-source models for floor-plan segmentation:
 - The current storage adapter is local filesystem oriented.
 - True DWG generation is a post-processing conversion from DXF, not a native DWG writer.
 - The pipeline is synchronous inside a Celery task; parallel page processing is a future optimization.
-- **No ML segmentation model is bundled.** The `backend/models/` directory is empty. Jobs using `segmenter: "ml"` will fail until a model is downloaded and configured via `SEGMENTER_MODEL_PATH` or `SEGMENTER_MODEL_URL`.
+- **The bundled ML segmentation model is a reference implementation.** `backend/models/semantic_segmenter.onnx` is a small deterministic edge-energy model that satisfies the 5-class output contract but is not trained on floor plans. Swap in trained weights with `make download-model MODEL_URL=<url>` or `SEGMENTER_MODEL_URL`; artifacts are contract-validated on provisioning.
 - **DWG conversion requires an external binary.** The `dwg-converter` Compose profile is a placeholder. A `libredwg` sidecar Docker image (providing `dwgwrite`) should be built and wired into the profile for DXF→DWG support.

@@ -25,7 +25,7 @@ The project has implemented the core proof-of-concept path:
 | Phase 3 — 2D vectorization | Segment/vectorize into DXF. | Implemented. |
 | Phase 4 — 3D extrusion | Extrude walls/slabs and export GLB. | Implemented. |
 | Phase 5 — Polish and DWG | DWG hook, history, retries, cleanup. | Implemented/in review. |
-| **Stage 6 — ML Model & DWG Converter** | **ONNX model + libredwg sidecar.** | **Planned.** |
+| **Stage 6 — ML Model & DWG Converter** | **ONNX model + libredwg sidecar.** | **In progress (US-029 in review).** |
 
 ## Remaining product opportunities
 
@@ -33,7 +33,7 @@ The project has implemented the core proof-of-concept path:
 
 These are the critical blockers for production-quality conversion. See `TODO.md` Stage 6 for user stories.
 
-- **Acquire and integrate a pre-trained ONNX floor-plan segmentation model** (e.g. CubiCasa5K SegFormer ~85 MB or FloorPlan-Segmentation-UNet ~30 MB). Currently `backend/models/` is empty and the ML segmenter path is non-functional.
+- **Host trained weights for the floor-plan segmentation model.** US-029 bundled a contract-compliant reference ONNX model at `backend/models/semantic_segmenter.onnx` plus the validated acquisition path (`make download-model MODEL_URL=<url>` / `SEGMENTER_MODEL_URL`). The remaining step is selecting and hosting trained weights (e.g. CubiCasa5K SegFormer or FloorPlan-Segmentation-UNet converted to the segmenter's single-channel 5-class contract) for production accuracy.
 - **Wire `SEGMENTER_MODEL_PATH` / `SEGMENTER_MODEL_URL`** in `.env.example` and `docker-compose.yml` so the worker can auto-load the model on startup.
 - **Build a `libredwg` Docker sidecar** providing the `dwgwrite` binary for DXF→DWG conversion. The `dwg-converter` Compose profile is currently a placeholder alpine image.
 - **Validate ML segmentation output** covers all five mask classes (walls, doors, windows, rooms, text) and compare quality against the `classic` segmenter on sample architectural drawings.
