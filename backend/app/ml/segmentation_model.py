@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
 
 import numpy as np
 
@@ -247,4 +249,179 @@ def _describe_output(output: np.ndarray, errors: list[str]) -> tuple[str, int | 
         "model output must have shape (N,C,H,W), (N,H,W,C), or (N,H,W); "
         f"got {list(output.shape)}"
     )
+    return OUTPUT_UNSUPPORTED, None
+
+
+def download_segmentation_model(model_url: str, destination: Path | str) -> Path:
+    """Download a segmentation model from an http(s) URL to ``destination``.
+
+    Mirrors the scheme restrictions of ``SEGMENTER_MODEL_URL`` so only http or
+    https sources are accepted.
+    """
+    parsed_url = urlparse(model_url)
+    if parsed_url.scheme not in {"http", "https"}:
+        raise ValueError("model URL must use http or https")
+
+    destination_path = Path(destination)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    urlretrieve(model_url, destination_path)
+    return destination_path
+
+
+def provision_segmentation_model(
+    destination: Path | str,
+    *,
+    model_url: str | None = None,
+    force: bool = False,
+    max_size_bytes: int = MAX_MODEL_SIZE_BYTES,
+    probe_size: int = 64,
+) -> Path:
+    """Provision a contract-valid segmentation model at ``destination``.
+
+    Downloads from ``model_url`` when provided, otherwise builds the bundled
+    reference model. An existing valid model is reused unless ``force`` is set;
+    an existing invalid model is replaced. The result is validated against the
+    US-029 contract before being returned, and invalid artifacts are removed.
+    """
+    destination_path = Path(destination).expanduser().resolve()
+
+    if destination_path.exists() and not force:
+        existing = validate_segmentation_model(
+            destination_path, max_size_bytes=max_size_bytes, probe_size=probe_size
+        )
+        if existing.passed:
+            return destination_path
+        _remove_quietly(destination_path)
+
+    try:
+        if model_url:
+            download_segmentation_model(model_url, destination_path)
+        else:
+            build_reference_segmentation_model(destination_path)
+    except ModelProvisioningError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - wrap source failures for callers
+        _remove_quietly(destination_path)
+        raise ModelProvisioningError(f"failed to provision model: {exc}") from exc
+
+    report = validate_segmentation_model(
+        destination_path, max_size_bytes=max_size_bytes, probe_size=probe_size
+    )
+    if not report.passed:
+        _remove_quietly(destination_path)
+        raise ModelProvisioningError(
+            "provisioned model failed contract validation:\n" + report.summary()
+        )
+    return destination_path
+
+
+def _remove_quietly(path: Path) -> None:
+    """Delete a file without raising when it is already absent."""
+    path.unlink(missing_ok=True)
+
+
+def build_reference_segmentation_model(destination: Path | str, *, opset: int = 17) -> Path:
+    """Build the deterministic reference segmentation model at ``destination``.
+
+    The reference model expresses a classical edge-energy segmenter in ONNX so
+    the ML path is functional without external model hosting. It consumes a
+    single-channel grayscale float tensor ``(N, 1, H, W)`` normalized to
+    ``[0, 1]`` and emits ``(N, 6, H, W)`` class logits ordered
+    ``[background, walls, doors, windows, rooms, text]``. Channel 0 is the
+    background class, which the 6-channel decode path skips.
+
+    This is intentionally small (a few KB) so it stays far below the 100 MB
+    budget and can be committed or regenerated on demand. It is meant to be
+    swapped for a trained model via ``SEGMENTER_MODEL_URL`` or
+    ``make download-model MODEL_URL=...``.
+    """
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float32)
+    sobel_y = sobel_x.T.copy()
+    laplacian = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float32)
+
+    def kernel(name: str, values: np.ndarray) -> Any:
+        tensor = numpy_helper.from_array(values.reshape(1, 1, 3, 3), name=name)
+        return helper.make_node("Constant", [], [name], value=tensor)
+
+    def scalar(name: str, value: float) -> Any:
+        tensor = numpy_helper.from_array(np.array(value, dtype=np.float32), name=name)
+        return helper.make_node("Constant", [], [name], value=tensor)
+
+    nodes = [
+        kernel("sobel_x", sobel_x),
+        kernel("sobel_y", sobel_y),
+        kernel("laplacian", laplacian),
+        scalar("edge_gain", 8.0),
+        scalar("wall_offset", 3.0),
+        scalar("room_base", 2.0),
+        scalar("opening_gain", 4.0),
+        scalar("opening_offset", 3.5),
+        scalar("text_gain", 6.0),
+        scalar("text_offset", 4.5),
+        scalar("logit_min", -10.0),
+        scalar("logit_max", 10.0),
+        helper.make_node(
+            "Conv", ["input", "sobel_x"], ["gx"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
+        ),
+        helper.make_node(
+            "Conv", ["input", "sobel_y"], ["gy"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
+        ),
+        helper.make_node(
+            "Conv", ["input", "laplacian"], ["lap"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
+        ),
+        helper.make_node("Abs", ["gx"], ["abs_gx"]),
+        helper.make_node("Abs", ["gy"], ["abs_gy"]),
+        helper.make_node("Abs", ["lap"], ["abs_lap"]),
+        helper.make_node("Add", ["abs_gx", "abs_gy"], ["edge"]),
+        helper.make_node("Mul", ["edge", "edge_gain"], ["edge_scaled"]),
+        helper.make_node("Sub", ["edge_scaled", "wall_offset"], ["wall_logit"]),
+        helper.make_node("Clip", ["wall_logit", "logit_min", "logit_max"], ["walls"]),
+        helper.make_node("Sub", ["room_base", "edge_scaled"], ["room_logit"]),
+        helper.make_node("Clip", ["room_logit", "logit_min", "logit_max"], ["rooms"]),
+        helper.make_node("Mul", ["abs_gy", "opening_gain"], ["door_scaled"]),
+        helper.make_node("Sub", ["door_scaled", "opening_offset"], ["door_logit"]),
+        helper.make_node("Clip", ["door_logit", "logit_min", "logit_max"], ["doors"]),
+        helper.make_node("Mul", ["abs_gx", "opening_gain"], ["window_scaled"]),
+        helper.make_node("Sub", ["window_scaled", "opening_offset"], ["window_logit"]),
+        helper.make_node("Clip", ["window_logit", "logit_min", "logit_max"], ["windows"]),
+        helper.make_node("Mul", ["abs_lap", "text_gain"], ["text_scaled"]),
+        helper.make_node("Sub", ["text_scaled", "text_offset"], ["text_logit"]),
+        helper.make_node("Clip", ["text_logit", "logit_min", "logit_max"], ["text"]),
+        helper.make_node("Neg", ["walls"], ["background"]),
+        helper.make_node(
+            "Concat",
+            ["background", "walls", "doors", "windows", "rooms", "text"],
+            ["output"],
+            axis=1,
+        ),
+    ]
+
+    graph = helper.make_graph(
+        nodes=nodes,
+        name="floorplan-reference-segmenter",
+        inputs=[helper.make_tensor_value_info("input", TensorProto.FLOAT, ["N", 1, "H", "W"])],
+        outputs=[helper.make_tensor_value_info("output", TensorProto.FLOAT, ["N", 6, "H", "W"])],
+    )
+    model = helper.make_model(
+        graph,
+        opset_imports=[helper.make_opsetid("", opset)],
+        producer_name="drawlift-model-tooling",
+    )
+    model.ir_version = 8
+    model.model_version = 1
+    model.doc_string = (
+        "Deterministic reference floor-plan segmenter (US-029). Edge-energy "
+        "heuristics expressed as ONNX ops; replace with trained weights via "
+        "SEGMENTER_MODEL_URL or `make download-model MODEL_URL=...`."
+    )
+    onnx.checker.check_model(model)
+
+    destination_path = Path(destination)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    onnx.save(model, str(destination_path))
+    return destination_path
+
     return OUTPUT_UNSUPPORTED, None

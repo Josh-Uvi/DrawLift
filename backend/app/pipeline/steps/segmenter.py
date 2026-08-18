@@ -6,13 +6,15 @@ from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol, cast
-from urllib.parse import urlparse
-from urllib.request import urlretrieve
 
 import cv2
 import numpy as np
 
 from app.core.config import get_settings
+from app.ml.segmentation_model import (
+    SEGMENTATION_MODEL_FILENAME,
+    download_segmentation_model,
+)
 from app.pipeline.context import PipelineContext
 from app.pipeline.steps.base import PipelineStep
 
@@ -20,7 +22,7 @@ MASK_LABELS: tuple[str, ...] = ("walls", "doors", "windows", "rooms", "text")
 ML_SEGMENTER = "ml"
 CLASSIC_SEGMENTER = "classic"
 DEFAULT_SEGMENTER = CLASSIC_SEGMENTER
-DEFAULT_MODEL_FILENAME = "semantic_segmenter.onnx"
+DEFAULT_MODEL_FILENAME = SEGMENTATION_MODEL_FILENAME
 DEFAULT_MODEL_INPUT_SIZE: tuple[int, int] = (256, 256)
 
 SegmentationMasks = dict[str, list[np.ndarray]]
@@ -176,7 +178,7 @@ class OnnxSemanticSegmenter:
 
         model_url = self.model_url or settings.SEGMENTER_MODEL_URL
         if model_url:
-            _download_model(model_url, model_path)
+            download_segmentation_model(model_url, model_path)
             return model_path
 
         raise FileNotFoundError(
@@ -344,16 +346,6 @@ def _optional_path(value: str | None) -> Path | None:
     if value is None or value.strip() == "":
         return None
     return Path(value)
-
-
-def _download_model(model_url: str, destination: Path) -> None:
-    """Download a configured model URL into the local model cache."""
-    parsed_url = urlparse(model_url)
-    if parsed_url.scheme not in {"https", "http"}:
-        raise ValueError("SEGMENTER_MODEL_URL must use http or https")
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    urlretrieve(model_url, destination)
 
 
 @lru_cache(maxsize=1)
