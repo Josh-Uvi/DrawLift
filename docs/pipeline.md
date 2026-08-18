@@ -82,6 +82,28 @@ DXF outputs use domain-oriented layers such as:
 - `classic`: deterministic OpenCV path. It is faster and suitable for simple, high-contrast line drawings.
 - `ml`: ONNX Runtime path. It is intended for richer plans but depends on configured model files or model download settings.
 
+### Segmenter status (as of 2026-08)
+
+| Aspect | `classic` | `ml` |
+| --- | --- | --- |
+| Walls | ✅ Detected via Canny + Hough lines | ⚠️ Requires ONNX model (not yet bundled) |
+| Doors | ❌ Always zero mask | ⚠️ Requires ONNX model |
+| Windows | ❌ Always zero mask | ⚠️ Requires ONNX model |
+| Rooms | ✅ Derived from wall mask regions | ⚠️ Requires ONNX model |
+| Text | ❌ Always zero mask | ⚠️ Requires ONNX model |
+
+The `classic` segmenter uses thresholding, Canny edges, and probabilistic Hough line detection. It detects wall structures but emits zero-filled masks for doors, windows, and text. This means downstream vectorization and DXF output are structurally valid but semantically incomplete for real architectural drawings.
+
+The `ml` segmenter supports ONNX Runtime inference and will produce all five mask classes when a suitable model is configured. **No model file currently exists in `backend/models/`** and both `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are unset. See [Stage 6 in TODO.md](./TODO.md) for the model acquisition plan.
+
+Recommended lightweight open-source models for floor-plan segmentation:
+
+| Model | Source | Size | Notes |
+| --- | --- | --- | --- |
+| CubiCasa5K SegFormer | [HuggingFace](https://huggingface.co) | ~85 MB | 12 classes incl. walls, doors, windows, rooms, text. Best accuracy. |
+| FloorPlan-Segmentation-UNet | [AIVenture0/FloorPlan-Segmentation-UNet](https://huggingface.co/AIVenture0/FloorPlan-Segmentation-UNet) | ~30 MB | 8 classes. Lightweight U-Net. |
+| R2CNN Floor Plan | [luan1412167/r2cnn-floorplan](https://huggingface.co/luan1412167/r2cnn-floorplan) | ~50 MB | Wall/room/door/window detection. |
+
 ## Edge cases handled or expected
 
 - Multi-page PDFs write numbered page images and persist `page_count`.
@@ -95,3 +117,5 @@ DXF outputs use domain-oriented layers such as:
 - The current storage adapter is local filesystem oriented.
 - True DWG generation is a post-processing conversion from DXF, not a native DWG writer.
 - The pipeline is synchronous inside a Celery task; parallel page processing is a future optimization.
+- **No ML segmentation model is bundled.** The `backend/models/` directory is empty. Jobs using `segmenter: "ml"` will fail until a model is downloaded and configured via `SEGMENTER_MODEL_PATH` or `SEGMENTER_MODEL_URL`.
+- **DWG conversion requires an external binary.** The `dwg-converter` Compose profile is a placeholder. A `libredwg` sidecar Docker image (providing `dwgwrite`) should be built and wired into the profile for DXF→DWG support.

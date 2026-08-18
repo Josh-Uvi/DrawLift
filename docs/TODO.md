@@ -34,7 +34,7 @@
 
 `area:frontend` · `area:backend` · `area:devops` · `area:ml` · `area:docs`
 `type:bug` · `type:chore` · `type:spike` · `type:feature`
-`epic:p1-scaffold` · `epic:p2-pdf` · `epic:p3-vectorize` · `epic:p4-3d` · `epic:p5-polish`
+`epic:p1-scaffold` · `epic:p2-pdf` · `epic:p3-vectorize` · `epic:p4-3d` · `epic:p5-polish` · `epic:p6-ml-dwg`
 
 ---
 
@@ -48,8 +48,9 @@
 | 3   | **Phase 3 — 2D Vectorization** | PDF → DXF (core value)           | 👀 In Review   | 5       | 16    |
 | 4   | **Phase 4 — 3D Extrusion**     | Walls → 3D model                 | 👀 In Review   | 4       | 13    |
 | 5   | **Phase 5 — Polish & DWG**     | Production-ready with DWG export | 👀 In Review   | 4       | 14    |
+| 6   | **Phase 6 — ML Model & DWG**   | ONNX segmentation + libredwg DWG | 🟦 Todo        | 4       | 13    |
 
-**Total: 28 user stories · 94 actionable tasks**
+**Total: 32 user stories · 107 actionable tasks**
 
 ---
 
@@ -525,6 +526,71 @@
 
 ---
 
+# Stage 6 — ML Model & DWG Converter
+
+> **Goal:** Acquire a pre-trained ONNX floor-plan segmentation model, wire it into the ML segmenter path, and build a `libredwg` Docker sidecar for true DXF→DWG conversion. These are the two critical blockers preventing the pipeline from producing production-quality output.
+
+## Epic 6.1 — ML Model Acquisition
+
+### US-029 · As a backend dev, I want a pre-trained floor-plan ONNX model in `backend/models/`
+
+- **Priority:** P0 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:ml`, `type:feature`
+- **Acceptance Criteria:**
+  - [ ] Model file exists at `backend/models/semantic_segmenter.onnx`
+  - [ ] Model produces segmentation output compatible with 5-class mask format (walls, doors, windows, rooms, text)
+  - [ ] Model loads with ONNX Runtime on CPU without GPU dependencies
+  - [ ] Model file size is under 100 MB to fit within worker memory budget
+- **Tasks:**
+  - [ ] T-095 — Evaluate and select ONNX model (CubiCasa5K SegFormer ~85MB, FloorPlan-Segmentation-UNet ~30MB, or R2CNN ~50MB)
+  - [ ] T-096 — Download/convert model to ONNX format and place in `backend/models/`
+  - [ ] T-097 — Add `make download-model` target for reproducible model setup
+
+## Epic 6.2 — ML Segmentation Wiring
+
+### US-030 · As a backend dev, I want the ML segmenter wired with env config for the model path
+
+- **Priority:** P0 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`
+- **Acceptance Criteria:**
+  - [ ] `SEGMENTER_MODEL_PATH` is set in `.env.example` pointing to `backend/models/semantic_segmenter.onnx`
+  - [ ] `SEGMENTER_MODEL_URL` is set for auto-download fallback in Docker
+  - [ ] Worker loads model on startup without errors
+  - [ ] ML segmenter produces valid output for a sample floor plan PDF
+- **Tasks:**
+  - [ ] T-098 — Set `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` in `.env.example` and `docker-compose.yml`
+  - [ ] T-099 — Verify ONNX inference input/output tensor shapes match `OnnxSemanticSegmenter` expectations
+  - [ ] T-100 — Add integration test for ML segmenter with real model file
+
+### US-031 · As a user, I want ML segmentation producing all five mask classes
+
+- **Priority:** P1 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:ml`, `type:feature`
+- **Acceptance Criteria:**
+  - [ ] ML masks cover all 5 labels: walls, doors, windows, rooms, text
+  - [ ] `SEGMENTER_MODEL_INPUT_SIZE` config matches model's expected input dimensions
+  - [ ] Classic vs ML comparison documented on a sample architectural drawing
+  - [ ] DXF output includes door/window/text entities when using ML segmenter
+- **Tasks:**
+  - [ ] T-101 — Validate ML masks cover all 5 labels on test images
+  - [ ] T-102 — Update `SEGMENTER_MODEL_INPUT_SIZE` if model requires different resolution (e.g. 256×256 for CubiCasa5K)
+  - [ ] T-103 — Compare classic vs ML output quality on sample floor plan and document results
+
+## Epic 6.3 — DWG Converter Sidecar
+
+### US-032 · As a devops engineer, I want a libredwg Docker sidecar for DXF→DWG conversion
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:devops`, `type:feature`
+- **Acceptance Criteria:**
+  - [ ] `libredwg` Docker image builds successfully from source
+  - [ ] `dwg-converter` Compose profile uses the libredwg image instead of alpine placeholder
+  - [ ] `DWG_CONVERTER_COMMAND` is auto-configured to `dwgwrite {input} {output}` in compose
+  - [ ] End-to-end test: DXF→DWG conversion via sidecar produces a valid DWG file
+- **Tasks:**
+  - [ ] T-104 — Create `backend/Dockerfile.libredwg` building `dwgwrite` from GNU LibreDWG source
+  - [ ] T-105 — Update `dwg-converter` Compose profile to use libredwg image with storage volume mount
+  - [ ] T-106 — Set `DWG_CONVERTER_COMMAND='dwgwrite {input} {output}'` in docker-compose.yml
+  - [ ] T-107 — Add end-to-end test: generate DXF via pipeline, convert to DWG via sidecar, validate output
+
+---
+
 # Appendix A — GitHub Issue Management (via `gh` CLI & GitHub MCP)
 
 All implementation work is tracked as **GitHub Issues** on the project repo. Two equivalent ways to manage them: the **GitHub CLI (`gh`)** from the terminal, or the **GitHub MCP server** from inside an AI agent (e.g. Cline, Claude Desktop, Cursor).
@@ -744,6 +810,7 @@ The GitHub MCP server mirrors the `gh` CLI surface, so the bulk-creation script 
 | **Stage 3: 2D Vectorization** | US-016 → US-020 | PDF → DXF (core value)           |
 | **Stage 4: 3D Extrusion**     | US-021 → US-024 | Walls → 3D model                 |
 | **Stage 5: Polish & DWG**     | US-025 → US-028 | Production-ready with DWG export |
+| **Stage 6: ML Model & DWG**   | US-029 → US-032 | ONNX model + libredwg sidecar    |
 
 ---
 
@@ -782,8 +849,11 @@ Stage 4 (3D)                                    ▼
                                        │
 Stage 5 (Polish)                      ▼
   └── US-025 ── US-026 ── US-027 ── US-028
+                                       │
+Stage 6 (ML & DWG)                    ▼
+  └── US-029 ── US-030 ── US-031 ── US-032
 ```
 
 ---
 
-_Document version 0.9 — updated 2026-07-27 to reflect Stage 5 polish, DWG export, job history, retries, and cleanup (Epics 5.1/5.4). US-001 ✅ Done; US-002 → US-028 👀 In Review._
+_Document version 1.0 — updated 2026-08-18 to add Stage 6 (ML Model & DWG Converter) with US-029 → US-032 (Epics 6.1–6.3). US-001 ✅ Done; US-002 → US-028 👀 In Review; US-029 → US-032 🟦 Todo._
