@@ -60,6 +60,13 @@ make validate-model                       # validate against the US-029 contract
 Every provisioned artifact is validated (exists, <100 MB, CPU-only ONNX
 Runtime load, 5-class decodable output). Invalid downloads are removed.
 
+`SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are set by default in
+`.env.example` and `docker-compose.yml`; the URL is used as an auto-download
+fallback when the model file is missing (e.g. a fresh Docker models volume).
+Celery workers preload the configured model once per process at startup
+(`worker_process_init`), so misconfiguration surfaces in worker logs
+immediately.
+
 ## Hybrid local workflow
 
 Install dependencies first:

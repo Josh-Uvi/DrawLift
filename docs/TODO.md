@@ -551,16 +551,18 @@
 
 ### US-030 · As a backend dev, I want the ML segmenter wired with env config for the model path
 
-- **Priority:** P0 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`
+- **Priority:** P0 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:backend`, `type:feature`
 - **Acceptance Criteria:**
-  - [ ] `SEGMENTER_MODEL_PATH` is set in `.env.example` pointing to `backend/models/semantic_segmenter.onnx`
-  - [ ] `SEGMENTER_MODEL_URL` is set for auto-download fallback in Docker
-  - [ ] Worker loads model on startup without errors
-  - [ ] ML segmenter produces valid output for a sample floor plan PDF
+  - [x] `SEGMENTER_MODEL_PATH` is set in `.env.example` pointing to `backend/models/semantic_segmenter.onnx`
+  - [x] `SEGMENTER_MODEL_URL` is set for auto-download fallback in Docker
+  - [x] Worker loads model on startup without errors
+  - [x] ML segmenter produces valid output for a sample floor plan PDF
 - **Tasks:**
-  - [ ] T-098 — Set `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` in `.env.example` and `docker-compose.yml`
-  - [ ] T-099 — Verify ONNX inference input/output tensor shapes match `OnnxSemanticSegmenter` expectations
-  - [ ] T-100 — Add integration test for ML segmenter with real model file
+  - [x] T-098 — Set `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` in `.env.example` and `docker-compose.yml`
+  - [x] T-099 — Verify ONNX inference input/output tensor shapes match `OnnxSemanticSegmenter` expectations
+  - [x] T-100 — Add integration test for ML segmenter with real model file
+- **Implementation notes:**
+  - `.env.example` and the `backend`/`worker`/`beat` Compose services set `SEGMENTER_MODEL_PATH` plus a `SEGMENTER_MODEL_URL` auto-download fallback (the reference model served from this repository's `main` branch), so fresh Docker models volumes self-provision. Celery workers preload the configured model via a `worker_process_init` signal handler. Integration tests draw floor plans into real PDFs and run PDF parsing → preprocessing → ML segmentation end to end.
 
 ### US-031 · As a user, I want ML segmentation producing all five mask classes
 
@@ -858,4 +860,4 @@ Stage 6 (ML & DWG)                    ▼
 
 ---
 
-_Document version 1.1 — updated 2026-08-18: US-029 implemented (bundled reference ONNX model, contract validation, and `make download-model`). US-001 ✅ Done; US-002 → US-029 👀 In Review; US-030 → US-032 🟦 Todo._
+_Document version 1.2 — updated 2026-08-18: US-030 implemented (SEGMENTER_MODEL_PATH/URL env wiring, worker startup preload, tensor-contract and PDF integration tests). US-001 ✅ Done; US-002 → US-030 👀 In Review; US-031 → US-032 🟦 Todo._

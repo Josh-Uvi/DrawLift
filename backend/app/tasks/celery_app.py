@@ -1,9 +1,10 @@
 """Celery application instance with Redis broker and result backend."""
 
 from celery import Celery
-from celery.signals import task_failure
+from celery.signals import task_failure, worker_process_init
 
 from app.core.config import get_settings
+from app.pipeline import preload_configured_segmentation_model
 
 settings = get_settings()
 
@@ -13,6 +14,18 @@ celery_app = Celery(
     backend=settings.REDIS_URL,
     include=["app.tasks.placeholder", "app.tasks.cleanup"],
 )
+
+
+@worker_process_init.connect
+def _preload_segmentation_model(**kwargs: object) -> None:
+    """Load the configured ONNX segmentation model once per worker process.
+
+    Surfaces model configuration errors at worker startup instead of on the
+    first conversion job, and avoids paying ONNX session construction cost on
+    every job. No-op when neither ``SEGMENTER_MODEL_PATH`` nor
+    ``SEGMENTER_MODEL_URL`` is configured.
+    """
+    preload_configured_segmentation_model()
 
 
 @task_failure.connect
