@@ -12,7 +12,7 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: e2d4b634d51975aea55e32f43c51b61c1d5621a9756959b6258ebb955b7e6f2b
 - filename: docs/TODO.md
-  checksum: b5f17b6cf01637330d67c5ba181ae4325b52840fc321c21964bdb544638cf8bf
+  checksum: 78533e8320d6be2da2626bca0dfe00b07755a9823a31b5c196e18a06bfa0af37
 - filename: backend/app/api/v1/jobs_stream.py
   checksum: 6e6a351f846e5d70ba0879f6f78dc97b9ce7cff45062aa5e5c6492a7b062dfbc
 - filename: frontend/src/components/job/PageViewer.tsx
@@ -22,7 +22,7 @@ fileignoreconfig:
 - filename: backend/tests/test_jobs_download.py
   checksum: 862792199728f5213982e5f2c5d4dbcf01a74298c1ec46f597e64c056b34edc1
 - filename: backend/app/pipeline/steps/vectorizer.py
-  checksum: 69a216446d5421c4a5c27f461f6c341934e4cb05a2d0373f11e98f87bed9511f
+  checksum: 0fcbe749dae4efce40a06eb31615e82e71b79ad8c8fd56876d13388ac4283069
 - filename: backend/tests/test_dwg_converter_step.py
   checksum: 084c308be1a36ecea40ee09d99aad0d306710bc7ac25134557dfd10437e2834c
 - filename: backend/tests/test_jobs_management.py
@@ -37,4 +37,6 @@ fileignoreconfig:
   checksum: 429ddfe6d5318eee82bb0f7c24fa680cacaa5a525cde7e09671fdb4a25126a47
 - filename: backend/tests/test_stale_job_recovery.py
   checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
+- filename: backend/tests/test_celery_worker_config.py
+  checksum: c67ee5a15fb093dc5f20a535ba7d24aacd8209eb7ff57f8eafd086d66af40866
 version: "1.0"
