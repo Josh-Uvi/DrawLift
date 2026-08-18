@@ -155,6 +155,12 @@ models/
 !backend/app/models/
 !backend/app/models/**
 
+# Committed ML model artifact (US-029); other downloaded weights stay ignored
+!backend/models/
+backend/models/*
+!backend/models/semantic_segmenter.onnx
+
+
 # Re-exclude __pycache__ within negated directories
 backend/app/**/__pycache__/
 backend/app/**/*.pyc

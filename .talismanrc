@@ -2,7 +2,7 @@ fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
   checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: .env.example
-  checksum: ce36f940b9791f236b9ba6bbf276ca64cce685de9f51b619c8bb7592bb1ca449
+  checksum: 8bcca01839257826920bc481aca95685ae47f653d01170936c900202c2d97348
 - filename: backend/alembic/env.py
   checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
 - filename: backend/alembic.ini
@@ -10,9 +10,9 @@ fileignoreconfig:
 - filename: .github/workflows/pr-agent.yml
   checksum: 029fbcf2e43a8b51d187cc9f29a8eeb3de4504a14d5b9c1120072cf950f00d33
 - filename: frontend/package-lock.json
-  checksum: e2d4b634d51975aea55e32f43c51b61c1d5621a9756959b6258ebb955b7e6f2b
+  checksum: 9abe9b9e245be5f3bde7e5df87c0ee67ec7152bbd879393c48c70dc0f43cddd1
 - filename: docs/TODO.md
-  checksum: 78533e8320d6be2da2626bca0dfe00b07755a9823a31b5c196e18a06bfa0af37
+  checksum: 70498a37ad6e351295a247417521b5de40eb427c2d40c1e88ecdc9fde7665f80
 - filename: backend/app/api/v1/jobs_stream.py
   checksum: 6e6a351f846e5d70ba0879f6f78dc97b9ce7cff45062aa5e5c6492a7b062dfbc
 - filename: frontend/src/components/job/PageViewer.tsx
@@ -34,9 +34,11 @@ fileignoreconfig:
 - filename: backend/tests/test_placeholder_task_paths.py
   checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
 - filename: README.md
-  checksum: 429ddfe6d5318eee82bb0f7c24fa680cacaa5a525cde7e09671fdb4a25126a47
+  checksum: b5e84c2b670a321f7c98ad5bd59ee1161ea7a4c76bf18247e0aea8bc3c0d1583
 - filename: backend/tests/test_stale_job_recovery.py
   checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
 - filename: backend/tests/test_celery_worker_config.py
   checksum: c67ee5a15fb093dc5f20a535ba7d24aacd8209eb7ff57f8eafd086d66af40866
+- filename: backend/tests/test_model_provisioning.py
+  checksum: 242249ac75f5d800bfee9c16920f0d3842e6381114f6ff2c6bde22de69e2f0a8
 version: "1.0"

@@ -19,6 +19,8 @@ Important variables:
 | `STORAGE_PATH` | Root for uploaded/generated files. |
 | `STORAGE_TTL_DAYS` | Cleanup/archive threshold. |
 | `MODELS_PATH` | ONNX/model cache directory. |
+| `SEGMENTER_MODEL_PATH` | Optional explicit path to the segmentation ONNX model. |
+| `SEGMENTER_MODEL_URL` | Optional http(s) URL used to auto-download the segmentation model when the file is missing. |
 | `SEGMENTER_MODEL_INPUT_SIZE` | ONNX model input resolution side length in pixels (default `128`). Lower = less memory. |
 | `DWG_CONVERTER_COMMAND` | Optional external DWG conversion command template. |
 | `CORS_ORIGINS` | Allowed frontend origins. |
@@ -42,6 +44,21 @@ Start optional DWG profile:
 ```bash
 make docker-up-dwg
 ```
+
+## ML model provisioning
+
+`backend/models/semantic_segmenter.onnx` ships a small reference model so the
+`ml` segmenter works out of the box. To (re)provision it, or to swap in trained
+weights, use:
+
+```bash
+make download-model                       # provision the reference model
+make download-model MODEL_URL=<url>       # download trained weights instead
+make validate-model                       # validate against the US-029 contract
+```
+
+Every provisioned artifact is validated (exists, <100 MB, CPU-only ONNX
+Runtime load, 5-class decodable output). Invalid downloads are removed.
 
 ## Hybrid local workflow
 

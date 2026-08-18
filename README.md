@@ -208,6 +208,8 @@ make docker-down
 make local-up
 make local-status
 make logs-worker
+make download-model
+make validate-model
 ```
 
 ## Contributing
