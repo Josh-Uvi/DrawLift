@@ -12,7 +12,7 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: 9abe9b9e245be5f3bde7e5df87c0ee67ec7152bbd879393c48c70dc0f43cddd1
 - filename: docs/TODO.md
-  checksum: d3722d1f2d6ee0eb1592ed2b8a182168a7f8e833d6a2e34cc6c3e2a4726edcac
+  checksum: c146fa4c1bd6258da9ee45111908a177a1b39553b9e70e07d86927fe17221c0e
 - filename: backend/app/api/v1/jobs_stream.py
   checksum: 6e6a351f846e5d70ba0879f6f78dc97b9ce7cff45062aa5e5c6492a7b062dfbc
 - filename: frontend/src/components/job/PageViewer.tsx
@@ -24,7 +24,7 @@ fileignoreconfig:
 - filename: backend/app/pipeline/steps/vectorizer.py
   checksum: 0fcbe749dae4efce40a06eb31615e82e71b79ad8c8fd56876d13388ac4283069
 - filename: backend/tests/test_dwg_converter_step.py
-  checksum: 084c308be1a36ecea40ee09d99aad0d306710bc7ac25134557dfd10437e2834c
+  checksum: 9e35d96ee0bdc9c4c7a5431961585d67f31cf5ca9d459ce2d6e4bb7ab90568d5
 - filename: backend/tests/test_jobs_management.py
   checksum: 586e55133d93dc713533e2ceac79ec90db7f5a20e41c84edddba0b4e85335937
 - filename: frontend/src/app/history/page.tsx
@@ -34,7 +34,7 @@ fileignoreconfig:
 - filename: backend/tests/test_placeholder_task_paths.py
   checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
 - filename: README.md
-  checksum: b5e84c2b670a321f7c98ad5bd59ee1161ea7a4c76bf18247e0aea8bc3c0d1583
+  checksum: 025d08ffdf0f2d390d71f80b2e443fb58bc703739af104d221f5a41c7a03ee65
 - filename: backend/tests/test_stale_job_recovery.py
   checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
 - filename: backend/tests/test_celery_worker_config.py

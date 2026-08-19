@@ -39,13 +39,16 @@ services:
       MODELS_PATH: ${MODELS_PATH:-/app/models}
       SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/semantic_segmenter.onnx}
       SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://raw.githubusercontent.com/Josh-Uvi/DrawLift/main/backend/models/semantic_segmenter.onnx}
-      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
+      PATH: /opt/libredwg/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      LD_LIBRARY_PATH: /opt/libredwg/lib
+      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-dwgwrite {input} {output}}
       CORS_ORIGINS: '["http://localhost:3000"]'
       DEBUG: "true"
     volumes:
       - ./backend:/app
       - ${STORAGE_VOLUME:-storage_data}:/app/storage
       - ${MODELS_VOLUME:-models_data}:/app/models
+      - libredwg_root:/opt/libredwg:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,12 +66,15 @@ services:
       MODELS_PATH: ${MODELS_PATH:-/app/models}
       SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/semantic_segmenter.onnx}
       SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://raw.githubusercontent.com/Josh-Uvi/DrawLift/main/backend/models/semantic_segmenter.onnx}
-      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
+      PATH: /opt/libredwg/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      LD_LIBRARY_PATH: /opt/libredwg/lib
+      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-dwgwrite {input} {output}}
       JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-300}
     volumes:
       - ./backend:/app
       - ${STORAGE_VOLUME:-storage_data}:/app/storage
       - ${MODELS_VOLUME:-models_data}:/app/models
+      - libredwg_root:/opt/libredwg:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,12 +94,15 @@ services:
       MODELS_PATH: ${MODELS_PATH:-/app/models}
       SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/semantic_segmenter.onnx}
       SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://raw.githubusercontent.com/Josh-Uvi/DrawLift/main/backend/models/semantic_segmenter.onnx}
-      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-}
+      PATH: /opt/libredwg/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      LD_LIBRARY_PATH: /opt/libredwg/lib
+      DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-dwgwrite {input} {output}}
       JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-300}
     volumes:
       - ./backend:/app
       - ${STORAGE_VOLUME:-storage_data}:/app/storage
       - ${MODELS_VOLUME:-models_data}:/app/models
+      - libredwg_root:/opt/libredwg:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,12 +111,14 @@ services:
     command: celery -A app.tasks.celery_app beat --loglevel=info
 
   dwg-converter:
-    image: alpine:3.20
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.libredwg
     profiles:
       - dwg
     volumes:
       - ${STORAGE_VOLUME:-storage_data}:/app/storage
-    command: sh -c "echo 'Mount ODA FileConverter or libredwg here for DWG_CONVERTER_COMMAND' && tail -f /dev/null"
+      - libredwg_root:/opt/libredwg
 
   frontend:
     build: ./frontend
@@ -123,3 +134,4 @@ volumes:
   redis_data:
   storage_data:
   models_data:
+  libredwg_root:

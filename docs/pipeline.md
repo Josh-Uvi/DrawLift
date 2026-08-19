@@ -139,4 +139,4 @@ Recommended lightweight open-source models for floor-plan segmentation:
 - True DWG generation is a post-processing conversion from DXF, not a native DWG writer.
 - The pipeline is synchronous inside a Celery task; parallel page processing is a future optimization.
 - **The bundled ML segmentation model is a reference implementation.** `backend/models/semantic_segmenter.onnx` is a small deterministic edge-energy model that satisfies the 5-class output contract but is not trained on floor plans. Swap in trained weights with `make download-model MODEL_URL=<url>` or `SEGMENTER_MODEL_URL`; artifacts are contract-validated on provisioning.
-- **DWG conversion requires an external binary.** The `dwg-converter` Compose profile is a placeholder. A `libredwg` sidecar Docker image (providing `dwgwrite`) should be built and wired into the profile for DXF→DWG support.
+- **DWG conversion is now sidecar-based.** The optional `dwg-converter` Compose profile builds GNU LibreDWG from source and shares `/opt/libredwg` with the runtime services. `DwgConverterStep` prefers LibreDWG's `dxf2dwg`, then `dwgwrite`, and finally ODA FileConverter if configured manually.

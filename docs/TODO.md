@@ -583,17 +583,19 @@
 
 ### US-032 · As a devops engineer, I want a libredwg Docker sidecar for DXF→DWG conversion
 
-- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:devops`, `type:feature`
+- **Priority:** P1 · **Effort:** M · **Status:** 👀 In Review · **Labels:** `area:devops`, `type:feature`
 - **Acceptance Criteria:**
-  - [ ] `libredwg` Docker image builds successfully from source
-  - [ ] `dwg-converter` Compose profile uses the libredwg image instead of alpine placeholder
-  - [ ] `DWG_CONVERTER_COMMAND` is auto-configured to `dwgwrite {input} {output}` in compose
-  - [ ] End-to-end test: DXF→DWG conversion via sidecar produces a valid DWG file
+  - [x] `libredwg` Docker image builds successfully from source
+  - [x] `dwg-converter` Compose profile uses the libredwg image instead of alpine placeholder
+  - [x] `DWG_CONVERTER_COMMAND` is auto-configured to `dwgwrite {input} {output}` in compose
+  - [x] End-to-end test: DXF→DWG conversion via sidecar produces a valid DWG file
 - **Tasks:**
-  - [ ] T-104 — Create `backend/Dockerfile.libredwg` building `dwgwrite` from GNU LibreDWG source
-  - [ ] T-105 — Update `dwg-converter` Compose profile to use libredwg image with storage volume mount
-  - [ ] T-106 — Set `DWG_CONVERTER_COMMAND='dwgwrite {input} {output}'` in docker-compose.yml
-  - [ ] T-107 — Add end-to-end test: generate DXF via pipeline, convert to DWG via sidecar, validate output
+  - [x] T-104 — Create `backend/Dockerfile.libredwg` building `dwgwrite` from GNU LibreDWG source
+  - [x] T-105 — Update `dwg-converter` Compose profile to use libredwg image with storage volume mount
+  - [x] T-106 — Set `DWG_CONVERTER_COMMAND='dwgwrite {input} {output}'` in docker-compose.yml
+  - [x] T-107 — Add end-to-end test: generate DXF via pipeline, convert to DWG via sidecar, validate output
+- **Implementation notes:**
+  - The GNU LibreDWG image is built from the official 0.13.3 source tarball and installed into a shared `/opt/libredwg` volume that the `backend`, `worker`, and `beat` services mount read-only. Compose auto-configures `DWG_CONVERTER_COMMAND='dwgwrite {input} {output}'`; the image provides a compatibility wrapper translating that two-positional-args contract to LibreDWG's native `dwgwrite -o OUTFILE INFILE` CLI. The runtime step now prefers `dxf2dwg` first, then `dwgwrite`, before falling back to ODA FileConverter.
 
 ---
 
