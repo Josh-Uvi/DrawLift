@@ -23,7 +23,6 @@ ML_SEGMENTER = "ml"
 CLASSIC_SEGMENTER = "classic"
 DEFAULT_SEGMENTER = CLASSIC_SEGMENTER
 DEFAULT_MODEL_FILENAME = SEGMENTATION_MODEL_FILENAME
-DEFAULT_MODEL_INPUT_SIZE: tuple[int, int] = (256, 256)
 
 SegmentationMasks = dict[str, list[np.ndarray]]
 MaskPathMap = dict[str, list[Path]]

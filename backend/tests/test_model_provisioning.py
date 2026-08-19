@@ -232,6 +232,17 @@ def test_cli_check_validates_existing_model(tmp_path: Path) -> None:
     assert "result: PASS" in result.stdout
 
 
+def test_cli_check_reports_configured_input_size_compatibility(tmp_path: Path) -> None:
+    """T-102: `--check` surfaces the configured input size and its compatibility."""
+    provision_segmentation_model(tmp_path / "semantic_segmenter.onnx")
+
+    result = _run_cli("--check", "--models-dir", str(tmp_path))
+
+    assert result.returncode == 0, result.stderr
+    assert "input size:" in result.stdout
+    assert "is compatible with the model" in result.stdout
+
+
 def test_cli_check_fails_for_missing_model(tmp_path: Path) -> None:
     result = _run_cli("--check", "--models-dir", str(tmp_path))
 

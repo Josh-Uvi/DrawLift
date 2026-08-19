@@ -168,6 +168,89 @@ def validate_segmentation_model(
     )
 
 
+@dataclass(frozen=True)
+class InputSizeCompatibilityReport:
+    """Whether a configured input size matches a model's declared dimensions."""
+
+    path: Path
+    input_size: tuple[int, int]
+    declared_shape: tuple[Any, ...] | None = None
+    compatible: bool = False
+    reason: str = ""
+
+
+def check_model_input_size(
+    model_path: Path | str, input_size: int | tuple[int, int]
+) -> InputSizeCompatibilityReport:
+    """Check a ``SEGMENTER_MODEL_INPUT_SIZE``-style size against a model (T-102).
+
+    The segmenter resizes every page into a tensor of the configured size.
+    Models with dynamic spatial dimensions accept any size; models with fixed
+    spatial dimensions must match exactly. The check also runs one real CPU
+    inference at the configured size.
+    """
+    size = (
+        (input_size, input_size)
+        if isinstance(input_size, int)
+        else (int(input_size[0]), int(input_size[1]))
+    )
+    path = Path(model_path).expanduser().resolve()
+    if not path.is_file():
+        return InputSizeCompatibilityReport(
+            path=path, input_size=size, reason="model file not found"
+        )
+
+    errors: list[str] = []
+    session = _load_cpu_session(path, errors)
+    if session is None:
+        return InputSizeCompatibilityReport(path=path, input_size=size, reason="; ".join(errors))
+
+    input_meta = session.get_inputs()[0]
+    declared_shape = tuple(input_meta.shape)
+
+    def report(reason: str, *, compatible: bool = False) -> InputSizeCompatibilityReport:
+        return InputSizeCompatibilityReport(
+            path=path,
+            input_size=size,
+            declared_shape=declared_shape,
+            compatible=compatible,
+            reason=reason,
+        )
+
+    if len(declared_shape) != 4:
+        return report(f"model input must be a 4D NCHW tensor; got shape {list(declared_shape)}")
+    channels = declared_shape[1]
+    if isinstance(channels, int) and channels != 1:
+        return report(
+            f"model expects {channels} input channels; the segmenter feeds "
+            "single-channel grayscale images"
+        )
+    for axis_name, declared, requested in (
+        ("height", declared_shape[2], size[0]),
+        ("width", declared_shape[3], size[1]),
+    ):
+        if isinstance(declared, int) and declared != requested:
+            return report(
+                f"model expects fixed {axis_name} {declared}; configured "
+                f"input size is {requested}"
+            )
+    if input_meta.type != FLOAT_INPUT_TYPE:
+        return report(f"model input type is {input_meta.type}; expected {FLOAT_INPUT_TYPE}")
+
+    batch = declared_shape[0] if isinstance(declared_shape[0], int) and declared_shape[0] > 0 else 1
+    probe_channels = channels if isinstance(channels, int) else 1
+    probe = np.full((batch, probe_channels, size[0], size[1]), 0.5, dtype=np.float32)
+    try:
+        session.run(None, {input_meta.name: probe})
+    except Exception as exc:  # noqa: BLE001 - report any runtime failure verbatim
+        return report(f"inference at {size[0]}x{size[1]} failed: {exc}")
+
+    return report(
+        f"input size {size[0]}x{size[1]} is compatible with the model",
+        compatible=True,
+    )
+
+
 def _load_cpu_session(path: Path, errors: list[str]) -> Any | None:
     """Create a CPU-only ONNX Runtime session or record the failure."""
     import onnxruntime as ort
