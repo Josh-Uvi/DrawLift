@@ -45,6 +45,10 @@ Start optional DWG profile:
 make docker-up-dwg
 ```
 
+This profile now builds GNU LibreDWG from source and exports `/opt/libredwg`
+through a named volume. The runtime services mount that volume read-only and
+default `DWG_CONVERTER_COMMAND` to `dwgwrite {input} {output}`.
+
 ## ML model provisioning
 
 `backend/models/semantic_segmenter.onnx` ships a small reference model so the

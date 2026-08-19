@@ -30,7 +30,7 @@ flowchart TB
 | `beat` | `backend/app/tasks/cleanup.py` | Daily cleanup/archive scheduler. |
 | `postgres` | Docker image | Job metadata, config JSON, progress, errors, timestamps. |
 | `redis` | Docker image | Celery broker/result backend and progress Pub/Sub. |
-| `dwg-converter` | optional Compose profile | Placeholder sidecar for operator-supplied DWG tooling. |
+| `dwg-converter` | optional Compose profile | GNU LibreDWG sidecar that provides DXF→DWG conversion tooling (`dxf2dwg`, `dwgwrite`) via a shared volume. |
 
 ## Job lifecycle
 

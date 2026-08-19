@@ -112,17 +112,23 @@ make local-down
 
 ### Optional DWG conversion
 
-DWG is proprietary, so DrawLift does not bundle converter binaries. Configure an external converter command when needed:
+DWG is proprietary, so DrawLift keeps conversion in an optional sidecar. The
+`dwg-converter` Compose profile now builds GNU LibreDWG from source and exports
+its CLIs to the runtime services through a shared `/opt/libredwg` volume. By
+default, Compose auto-configures:
 
 ```bash
-DWG_CONVERTER_COMMAND='dwgwrite {input} {output}' make docker-up
+DWG_CONVERTER_COMMAND='dwgwrite {input} {output}'
 ```
 
-Supported placeholders are `{input}`, `{output}`, `{input_dir}`, `{output_dir}`, and `{stem}`. The optional Compose profile can be started with:
+Supported placeholders are `{input}`, `{output}`, `{input_dir}`, `{output_dir}`, and `{stem}`. Start the sidecar profile with:
 
 ```bash
 make docker-up-dwg
 ```
+
+`DwgConverterStep` prefers GNU LibreDWG's `dxf2dwg`, then `dwgwrite`, and falls
+back to ODA FileConverter when operators override `DWG_CONVERTER_COMMAND`.
 
 ## API
 
