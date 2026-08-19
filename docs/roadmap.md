@@ -34,9 +34,8 @@ The project has implemented the core proof-of-concept path:
 These are the critical blockers for production-quality conversion. See `TODO.md` Stage 6 for user stories.
 
 - **Host trained weights for the floor-plan segmentation model.** US-029 bundled a contract-compliant reference ONNX model at `backend/models/semantic_segmenter.onnx` plus the validated acquisition path (`make download-model MODEL_URL=<url>` / `SEGMENTER_MODEL_URL`). The remaining step is selecting and hosting trained weights (e.g. CubiCasa5K SegFormer or FloorPlan-Segmentation-UNet converted to the segmenter's single-channel 5-class contract) for production accuracy.
-- **Wire `SEGMENTER_MODEL_PATH` / `SEGMENTER_MODEL_URL`** in `.env.example` and `docker-compose.yml` so the worker can auto-load the model on startup.
 - **Build a `libredwg` Docker sidecar** providing the `dwgwrite` binary for DXF→DWG conversion. The `dwg-converter` Compose profile is currently a placeholder alpine image.
-- **Validate ML segmentation output** covers all five mask classes (walls, doors, windows, rooms, text) and compare quality against the `classic` segmenter on sample architectural drawings.
+- **Swap the reference model for trained weights and benchmark accuracy.** US-031 proved the 5-label contract, input-size compatibility checks, and DXF layer plumbing using the bundled deterministic reference model. The next step is hosting trained weights and benchmarking them against architectural drawings.
 
 ### Conversion quality
 
