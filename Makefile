@@ -149,8 +149,9 @@ docker-logs: check-compose ## Follow logs for all Docker services
 docker-migrate: check-compose ## Run Alembic migrations in the Docker backend service
 	$(COMPOSE) exec backend alembic upgrade head
 
-docker-up-dwg: check-compose ## Start default Docker services plus the optional DWG converter profile
-	$(COMPOSE) --profile dwg up -d --build $(DOCKER_SERVICES) dwg-converter
+docker-up-dwg: check-compose ## Start GNU LibreDWG first, then the default stack with the DWG profile
+	$(COMPOSE) --profile dwg up -d --build dwg-converter
+	$(COMPOSE) --profile dwg up -d --build $(DOCKER_SERVICES)
 
 .PHONY: download-model validate-model
 download-model: check-backend-venv ## Download/provision the ONNX segmentation model (optional MODEL_URL=<url>)

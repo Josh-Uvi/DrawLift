@@ -111,7 +111,8 @@ def _format_command(command: str, *, dxf_path: Path, dwg_path: Path) -> list[str
 def _default_converter_commands(*, dxf_path: Path, dwg_path: Path) -> list[list[str]]:
     """Return supported converter command candidates in preference order."""
     return [
-        ["dwgwrite", str(dxf_path), str(dwg_path)],
+        ["dxf2dwg", "-y", "-o", str(dwg_path), str(dxf_path)],
+        ["dwgwrite", "-y", "-o", str(dwg_path), str(dxf_path)],
         [
             "ODAFileConverter",
             str(dxf_path.parent),

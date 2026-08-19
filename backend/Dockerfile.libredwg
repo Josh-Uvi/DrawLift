@@ -1,0 +1,67 @@
+FROM debian:bookworm-slim
+
+ARG LIBREDWG_VERSION=0.13.3
+ARG LIBREDWG_DIST=/opt/libredwg-dist
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CFLAGS="-O0 -g0"
+
+WORKDIR /tmp/libredwg-src
+
+# Basic GNU LibreDWG build requirements from the official README:
+#   C compiler + make + autoconf/automake/libtool, plus curl/xz-utils to fetch
+#   and unpack the release tarball. Bindings are disabled to keep the build
+#   smaller and faster; DXF support stays enabled because dxf2dwg/dwgwrite need
+#   it for DXF -> DWG conversion.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        autoconf \
+        automake \
+        build-essential \
+        ca-certificates \
+        curl \
+        libtool \
+        pkg-config \
+        xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L --fail --silent \
+        "https://ftp.gnu.org/gnu/libredwg/libredwg-${LIBREDWG_VERSION}.tar.xz" \
+        -o libredwg.tar.xz \
+    && tar -xf libredwg.tar.xz \
+    && cd "libredwg-${LIBREDWG_VERSION}" \
+    && ./configure --prefix="${LIBREDWG_DIST}" --disable-bindings --disable-python \
+    && make -j1 \
+    && make install \
+    && "${LIBREDWG_DIST}/bin/dwgwrite" --version \
+    && "${LIBREDWG_DIST}/bin/dxf2dwg" --version
+
+# The official dwgwrite CLI is `dwgwrite [-o DWGFILE] INFILE`, while the
+# application already standardised on `dwgwrite {input} {output}`. Replace the
+# installed binary inside the shared distribution tree with a compatibility
+# wrapper that keeps the two-positional-args contract working.
+RUN mv "${LIBREDWG_DIST}/bin/dwgwrite" "${LIBREDWG_DIST}/bin/dwgwrite-real" \
+    && cat > "${LIBREDWG_DIST}/bin/dwgwrite" <<'EOF' \
+    && chmod +x "${LIBREDWG_DIST}/bin/dwgwrite"
+#!/bin/sh
+set -eu
+
+if [ "$#" -ge 2 ] \
+   && [ "${1#-}" = "$1" ] \
+   && [ "${2#-}" = "$2" ]; then
+  input="$1"
+  output="$2"
+  shift 2
+  exec /opt/libredwg/bin/dwgwrite-real "$@" -o "$output" "$input"
+fi
+
+exec /opt/libredwg/bin/dwgwrite-real "$@"
+EOF
+
+COPY libredwg-entrypoint.sh /usr/local/bin/libredwg-entrypoint.sh
+RUN chmod +x /usr/local/bin/libredwg-entrypoint.sh \
+    && mkdir -p /app/storage /opt/libredwg
+
+WORKDIR /app
+ENTRYPOINT ["/usr/local/bin/libredwg-entrypoint.sh"]
+CMD ["sh", "-c", "echo 'GNU LibreDWG sidecar ready'; /opt/libredwg/bin/dwgwrite --version | head -1; tail -f /dev/null"]
