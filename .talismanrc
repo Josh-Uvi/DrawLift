@@ -2,7 +2,7 @@ fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
   checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
 - filename: .env.example
-  checksum: d1ed6b41ef3048d8f06600e6e80dfb829e65bc4255ab6050fedefd81eaeb98e8
+  checksum: 1e0cd1877f68cc815416d317b61610f15daaead9fc4503869bdd1b5b2325348f
 - filename: backend/alembic/env.py
   checksum: 36268371600cb457e610eb2625a5a5225deace0d05a550e25ab848d84ec52af0
 - filename: backend/alembic.ini
@@ -12,7 +12,7 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: 9abe9b9e245be5f3bde7e5df87c0ee67ec7152bbd879393c48c70dc0f43cddd1
 - filename: docs/TODO.md
-  checksum: 7426fb5e7035abc505379ba4651819e25a73b883d06ecad6da7bb1bb75942588
+  checksum: d3722d1f2d6ee0eb1592ed2b8a182168a7f8e833d6a2e34cc6c3e2a4726edcac
 - filename: backend/app/api/v1/jobs_stream.py
   checksum: 6e6a351f846e5d70ba0879f6f78dc97b9ce7cff45062aa5e5c6492a7b062dfbc
 - filename: frontend/src/components/job/PageViewer.tsx
@@ -40,7 +40,13 @@ fileignoreconfig:
 - filename: backend/tests/test_celery_worker_config.py
   checksum: c67ee5a15fb093dc5f20a535ba7d24aacd8209eb7ff57f8eafd086d66af40866
 - filename: backend/tests/test_model_provisioning.py
-  checksum: 242249ac75f5d800bfee9c16920f0d3842e6381114f6ff2c6bde22de69e2f0a8
+  checksum: 41c2ce7ac8ef945aab87bdf317c79798279123fe52746540b35c5ba7c95d2863
+- filename: backend/tests/test_ml_five_class_pipeline.py
+  checksum: bc4fe4dea10ff26a20d62139114fdf4f98e70ef78c64fbb0e67a46141326bed8
+- filename: backend/tests/test_segmenter_comparison.py
+  checksum: f916b174c044decb22ba28ddbf4509084acc333f83f7280599830fcad08bd811
+- filename: backend/app/ml/download_model.py
+  checksum: 9c4f4e4cd82aa01fa78ae9d4498e352bce2b3dd62c9b5289f4f860855aed130a
 - filename: backend/tests/test_model_env_wiring.py
   checksum: 896deca5abe0924e0dba7acb9cce21a983822a7a3482824868d99957d0d967fa
 - filename: backend/tests/test_worker_model_preload.py

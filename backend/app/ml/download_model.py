@@ -23,6 +23,7 @@ from app.core.config import get_settings
 from app.ml.segmentation_model import (
     SEGMENTATION_MODEL_FILENAME,
     ModelProvisioningError,
+    check_model_input_size,
     provision_segmentation_model,
     validate_segmentation_model,
 )
@@ -78,8 +79,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check:
         report = validate_segmentation_model(destination, probe_size=args.probe_size)
         print(report.summary())
-        print("result: PASS" if report.passed else "result: FAIL")
-        return 0 if report.passed else 1
+        input_size_report = check_model_input_size(destination, settings.SEGMENTER_MODEL_INPUT_SIZE)
+        configured_size = settings.SEGMENTER_MODEL_INPUT_SIZE
+        print(
+            f"input size: ({configured_size}, {configured_size}) — " f"{input_size_report.reason}"
+        )
+        passed = report.passed and input_size_report.compatible
+        print("result: PASS" if passed else "result: FAIL")
+        return 0 if passed else 1
 
     model_url = args.url or settings.SEGMENTER_MODEL_URL
     try:

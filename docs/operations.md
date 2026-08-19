@@ -54,11 +54,13 @@ weights, use:
 ```bash
 make download-model                       # provision the reference model
 make download-model MODEL_URL=<url>       # download trained weights instead
-make validate-model                       # validate against the US-029 contract
+make validate-model                       # validate model contract + configured input size
 ```
 
 Every provisioned artifact is validated (exists, <100 MB, CPU-only ONNX
-Runtime load, 5-class decodable output). Invalid downloads are removed.
+Runtime load, 5-class decodable output). `make validate-model` also verifies
+that the configured `SEGMENTER_MODEL_INPUT_SIZE` matches the model's declared
+input dimensions. Invalid downloads are removed.
 
 `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are set by default in
 `.env.example` and `docker-compose.yml`; the URL is used as an auto-download

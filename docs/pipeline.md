@@ -96,6 +96,27 @@ The `classic` segmenter uses thresholding, Canny edges, and probabilistic Hough 
 
 The `ml` segmenter supports ONNX Runtime inference and produces all five mask classes when a suitable model is configured. `backend/models/semantic_segmenter.onnx` ships a small deterministic reference model (edge-energy segmentation expressed as ONNX ops) that satisfies the segmenter contract so the ML path works out of the box. `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are configured by default in `.env.example` and `docker-compose.yml` (US-030): the URL acts as an auto-download fallback for fresh Docker model volumes, and Celery workers preload the configured model at startup via a `worker_process_init` handler. Trained weights can replace the reference model via `make download-model MODEL_URL=<url>` or `SEGMENTER_MODEL_URL`; every provisioned artifact is validated against the US-029 contract (CPU-only load, <100 MB, 5-class decodable output) by `app.ml.segmentation_model`. See [Stage 6 in TODO.md](./TODO.md) for the model acquisition plan.
 
+## Classic vs ML segmentation comparison
+
+US-031 adds a reproducible comparison helper (`app.ml.comparison.compare_segmenters`) and fixture-driven tests so classic-vs-ML quality claims are backed by measured coverage instead of anecdotes.
+
+Representative sample: a 240×320 floor plan containing exterior/interior walls, a door swing arc, a double-line window opening, and text-like room labels.
+
+| Label | Classic px | Classic % | ML px | ML % | ML blobs (>=12 px²) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| walls | 13179 | 17.16 | 17554 | 22.86 | 4 |
+| doors | 0 | 0.00 | 7826 | 10.19 | 13 |
+| windows | 0 | 0.00 | 8033 | 10.46 | 13 |
+| rooms | 37993 | 49.47 | 59203 | 77.09 | 9 |
+| text | 0 | 0.00 | 5055 | 6.58 | 10 |
+
+Observations:
+
+- The `classic` backend still provides structurally useful wall masks, but it cannot emit door, window, or text masks, so downstream DXF output lacks those semantic entities.
+- The bundled `ml` reference model activates all five labels on the same drawing and produces multiple vectorizable connected components for doors, windows, and text.
+- With the same fixture routed through the full PDF→DXF pipeline, the ML path emits entities on `DOORS`, `WINDOWS`, `ROOMS`, and `TEXT` layers; the classic path emits only `WALLS`.
+- The bundled reference model remains a deterministic edge-energy heuristic, not a trained floor-plan model. These numbers therefore prove the **5-label contract and DXF-layer plumbing**, not production-grade semantic accuracy.
+
 Recommended lightweight open-source models for floor-plan segmentation:
 
 | Model | Source | Size | Notes |

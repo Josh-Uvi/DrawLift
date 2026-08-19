@@ -566,16 +566,18 @@
 
 ### US-031 · As a user, I want ML segmentation producing all five mask classes
 
-- **Priority:** P1 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:ml`, `type:feature`
+- **Priority:** P1 · **Effort:** S · **Status:** 👀 In Review · **Labels:** `area:ml`, `type:feature`
 - **Acceptance Criteria:**
-  - [ ] ML masks cover all 5 labels: walls, doors, windows, rooms, text
-  - [ ] `SEGMENTER_MODEL_INPUT_SIZE` config matches model's expected input dimensions
-  - [ ] Classic vs ML comparison documented on a sample architectural drawing
-  - [ ] DXF output includes door/window/text entities when using ML segmenter
+  - [x] ML masks cover all 5 labels: walls, doors, windows, rooms, text
+  - [x] `SEGMENTER_MODEL_INPUT_SIZE` config matches model's expected input dimensions
+  - [x] Classic vs ML comparison documented on a sample architectural drawing
+  - [x] DXF output includes door/window/text entities when using ML segmenter
 - **Tasks:**
-  - [ ] T-101 — Validate ML masks cover all 5 labels on test images
-  - [ ] T-102 — Update `SEGMENTER_MODEL_INPUT_SIZE` if model requires different resolution (e.g. 256×256 for CubiCasa5K)
-  - [ ] T-103 — Compare classic vs ML output quality on sample floor plan and document results
+  - [x] T-101 — Validate ML masks cover all 5 labels on test images
+  - [x] T-102 — Update `SEGMENTER_MODEL_INPUT_SIZE` if model requires different resolution (e.g. 256×256 for CubiCasa5K)
+  - [x] T-103 — Compare classic vs ML output quality on sample floor plan and document results
+- **Implementation notes:**
+  - The bundled reference model emits all five labels for floor plans containing walls, doors, windows, and text; `app.ml.comparison.compare_segmenters` produces reproducible per-label coverage/reporting. `check_model_input_size` verifies the configured `SEGMENTER_MODEL_INPUT_SIZE` against a model's declared input dims (and `make validate-model` reports it). The full PDF→DXF pipeline with `segmenter: "ml"` emits DOORS/WINDOWS/TEXT entities, which the classic backend cannot produce. See [Classic vs ML comparison](./pipeline.md#classic-vs-ml-segmentation-comparison).
 
 ## Epic 6.3 — DWG Converter Sidecar
 
@@ -860,4 +862,4 @@ Stage 6 (ML & DWG)                    ▼
 
 ---
 
-_Document version 1.2 — updated 2026-08-18: US-030 implemented (SEGMENTER_MODEL_PATH/URL env wiring, worker startup preload, tensor-contract and PDF integration tests). US-001 ✅ Done; US-002 → US-030 👀 In Review; US-031 → US-032 🟦 Todo._
+_Document version 1.3 — updated 2026-08-18: US-031 implemented (ML five-class masks, input-size validation, classic vs ML comparison documented, DXF entity coverage). US-001 ✅ Done; US-002 → US-031 👀 In Review; US-032 🟦 Todo._
