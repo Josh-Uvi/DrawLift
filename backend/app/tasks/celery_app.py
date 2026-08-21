@@ -18,10 +18,10 @@ celery_app = Celery(
 
 @worker_process_init.connect
 def _preload_segmentation_model(**kwargs: object) -> None:
-    """Load the configured ONNX segmentation model once per worker process.
+    """Load the configured ML segmentation backend once per worker process.
 
     Surfaces model configuration errors at worker startup instead of on the
-    first conversion job, and avoids paying ONNX session construction cost on
+    first conversion job, and avoids paying model/session construction cost on
     every job. No-op when neither ``SEGMENTER_MODEL_PATH`` nor
     ``SEGMENTER_MODEL_URL`` is configured.
     """

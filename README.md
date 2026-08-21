@@ -58,6 +58,11 @@ cp .env.example .env
 
 The default Docker Compose stack uses PostgreSQL, Redis, local storage volumes, and `NEXT_PUBLIC_API_URL=http://localhost:8000`.
 
+The default ML runtime now targets the `Yytsi/floorplan-to-3d-walls` Torch
+bundle (`best.safetensors` + `config.yaml`). On a fresh Docker models volume,
+the backend/worker auto-download the bundle and preload the configured ML
+backend at worker startup.
+
 ### All-Docker quick start
 
 ```bash
@@ -203,6 +208,10 @@ cd ../frontend
 npm run lint
 npm run format:check
 npm run build
+
+# root hooks (frontend deps auto-bootstrap if missing)
+cd ..
+pre-commit run --all-files
 ```
 
 Root service commands:

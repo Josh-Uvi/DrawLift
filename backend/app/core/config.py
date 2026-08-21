@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     MODELS_PATH: str = "./models"
     SEGMENTER_MODEL_PATH: str | None = None
     SEGMENTER_MODEL_URL: str | None = None
+    SEGMENTER_MODEL_CONFIG_PATH: str | None = None
+    SEGMENTER_MODEL_CONFIG_URL: str | None = None
     SEGMENTER_MODEL_INPUT_SIZE: int = 128
 
     # CORS

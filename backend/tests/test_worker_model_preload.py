@@ -50,7 +50,7 @@ def test_worker_preload_handler_is_registered_on_worker_process_init() -> None:
 def test_worker_startup_loads_configured_model_without_errors(
     worker_startup_state: pytest.MonkeyPatch,
 ) -> None:
-    """AC: worker loads the model on startup when SEGMENTER_MODEL_PATH is set."""
+    """AC: worker preloads the configured ONNX backend on startup."""
     worker_startup_state.setenv("SEGMENTER_MODEL_PATH", str(BUNDLED_MODEL_PATH))
     worker_startup_state.delenv("SEGMENTER_MODEL_URL", raising=False)
 
@@ -78,7 +78,7 @@ def test_worker_startup_preload_is_cached_per_process(
 def test_worker_startup_is_noop_without_model_config(
     worker_startup_state: pytest.MonkeyPatch,
 ) -> None:
-    """Workers without model configuration start without touching ONNX Runtime."""
+    """Workers without model configuration start without touching model caches."""
     worker_startup_state.delenv("SEGMENTER_MODEL_PATH", raising=False)
     worker_startup_state.delenv("SEGMENTER_MODEL_URL", raising=False)
 
@@ -102,4 +102,34 @@ def test_worker_startup_with_missing_model_path_does_not_load_session(
 
     _send_worker_process_init()
 
+    assert _get_onnx_session.cache_info().currsize == 0
+
+
+def test_worker_startup_preloads_torch_bundle_without_touching_onnx_cache(
+    worker_startup_state: pytest.MonkeyPatch,
+) -> None:
+    """Workers preload the Torch Yytsi backend when configured with `.safetensors`."""
+    worker_startup_state.setenv("SEGMENTER_MODEL_PATH", "/tmp/models/best.safetensors")
+    worker_startup_state.setenv("SEGMENTER_MODEL_CONFIG_PATH", "/tmp/models/config.yaml")
+    worker_startup_state.delenv("SEGMENTER_MODEL_URL", raising=False)
+    worker_startup_state.delenv("SEGMENTER_MODEL_CONFIG_URL", raising=False)
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_yytsi_model(weights_path: str, config_path: str) -> object:
+        calls.append((weights_path, config_path))
+        return object()
+
+    worker_startup_state.setattr(
+        "app.pipeline.steps.segmenter.resolve_yytsi_model_assets",
+        lambda **_: (Path("/tmp/models/best.safetensors"), Path("/tmp/models/config.yaml")),
+    )
+    worker_startup_state.setattr(
+        "app.pipeline.steps.segmenter.get_yytsi_model",
+        fake_get_yytsi_model,
+    )
+
+    _send_worker_process_init()
+
+    assert calls == [("/tmp/models/best.safetensors", "/tmp/models/config.yaml")]
     assert _get_onnx_session.cache_info().currsize == 0

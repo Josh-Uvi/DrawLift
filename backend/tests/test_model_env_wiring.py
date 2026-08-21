@@ -17,7 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 ENV_EXAMPLE_PATH = REPO_ROOT / ".env.example"
 
-CONTAINER_MODEL_PATH_DEFAULT = "/app/models/semantic_segmenter.onnx"
+CONTAINER_MODEL_PATH_DEFAULT = "/app/models/best.safetensors"
+CONTAINER_CONFIG_PATH_DEFAULT = "/app/models/config.yaml"
 
 
 def _active_env_example_values() -> dict[str, str]:
@@ -43,7 +44,7 @@ def test_env_example_sets_segmenter_model_path() -> None:
     """AC: SEGMENTER_MODEL_PATH is set in .env.example for the bundled model."""
     values = _active_env_example_values()
 
-    assert values.get("SEGMENTER_MODEL_PATH") == "./models/semantic_segmenter.onnx"
+    assert values.get("SEGMENTER_MODEL_PATH") == "./models/best.safetensors"
 
 
 def test_env_example_sets_segmenter_model_url_fallback() -> None:
@@ -52,7 +53,17 @@ def test_env_example_sets_segmenter_model_url_fallback() -> None:
 
     model_url = values.get("SEGMENTER_MODEL_URL", "")
     assert model_url.startswith("https://")
-    assert model_url.endswith("semantic_segmenter.onnx")
+    assert model_url.endswith("best.safetensors")
+
+
+def test_env_example_sets_segmenter_model_config_bundle_values() -> None:
+    """Torch bundle defaults include an explicit companion config path and URL."""
+    values = _active_env_example_values()
+
+    assert values.get("SEGMENTER_MODEL_CONFIG_PATH") == "./models/config.yaml"
+    config_url = values.get("SEGMENTER_MODEL_CONFIG_URL", "")
+    assert config_url.startswith("https://")
+    assert config_url.endswith("config.yaml")
 
 
 @pytest.mark.parametrize("service_name", ["backend", "worker", "beat"])
@@ -62,11 +73,17 @@ def test_compose_services_configure_segmenter_model_env(service_name: str) -> No
 
     path_value = environment.get("SEGMENTER_MODEL_PATH", "")
     url_value = environment.get("SEGMENTER_MODEL_URL", "")
+    config_path_value = environment.get("SEGMENTER_MODEL_CONFIG_PATH", "")
+    config_url_value = environment.get("SEGMENTER_MODEL_CONFIG_URL", "")
 
     assert CONTAINER_MODEL_PATH_DEFAULT in path_value
+    assert CONTAINER_CONFIG_PATH_DEFAULT in config_path_value
     assert path_value.startswith("${SEGMENTER_MODEL_PATH:-")
+    assert config_path_value.startswith("${SEGMENTER_MODEL_CONFIG_PATH:-")
     assert url_value.startswith("${SEGMENTER_MODEL_URL:-https://")
-    assert url_value.endswith("semantic_segmenter.onnx}")
+    assert config_url_value.startswith("${SEGMENTER_MODEL_CONFIG_URL:-https://")
+    assert url_value.endswith("best.safetensors}")
+    assert config_url_value.endswith("config.yaml}")
 
 
 def test_compose_worker_mounts_models_volume() -> None:
@@ -79,13 +96,17 @@ def test_compose_worker_mounts_models_volume() -> None:
 
 def test_settings_expose_segmenter_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Settings surface SEGMENTER_MODEL_PATH/URL from the environment."""
-    monkeypatch.setenv("SEGMENTER_MODEL_PATH", "./models/semantic_segmenter.onnx")
-    monkeypatch.setenv("SEGMENTER_MODEL_URL", "https://example.com/semantic_segmenter.onnx")
+    monkeypatch.setenv("SEGMENTER_MODEL_PATH", "./models/best.safetensors")
+    monkeypatch.setenv("SEGMENTER_MODEL_URL", "https://example.com/best.safetensors")
+    monkeypatch.setenv("SEGMENTER_MODEL_CONFIG_PATH", "./models/config.yaml")
+    monkeypatch.setenv("SEGMENTER_MODEL_CONFIG_URL", "https://example.com/config.yaml")
     get_settings.cache_clear()
 
     try:
         settings = get_settings()
-        assert settings.SEGMENTER_MODEL_PATH == "./models/semantic_segmenter.onnx"
-        assert settings.SEGMENTER_MODEL_URL == "https://example.com/semantic_segmenter.onnx"
+        assert settings.SEGMENTER_MODEL_PATH == "./models/best.safetensors"
+        assert settings.SEGMENTER_MODEL_URL == "https://example.com/best.safetensors"
+        assert settings.SEGMENTER_MODEL_CONFIG_PATH == "./models/config.yaml"
+        assert settings.SEGMENTER_MODEL_CONFIG_URL == "https://example.com/config.yaml"
     finally:
         get_settings.cache_clear()

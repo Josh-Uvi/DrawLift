@@ -37,8 +37,11 @@ services:
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       STORAGE_TTL_DAYS: 7
       MODELS_PATH: ${MODELS_PATH:-/app/models}
-      SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/semantic_segmenter.onnx}
-      SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://raw.githubusercontent.com/Josh-Uvi/DrawLift/main/backend/models/semantic_segmenter.onnx}
+      SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/best.safetensors}
+      SEGMENTER_MODEL_CONFIG_PATH: ${SEGMENTER_MODEL_CONFIG_PATH:-/app/models/config.yaml}
+      SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/best.safetensors}
+      SEGMENTER_MODEL_CONFIG_URL: ${SEGMENTER_MODEL_CONFIG_URL:-https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/config.yaml}
+      SEGMENTER_MODEL_INPUT_SIZE: ${SEGMENTER_MODEL_INPUT_SIZE:-512}
       PATH: /opt/libredwg/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       LD_LIBRARY_PATH: /opt/libredwg/lib
       DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-dwgwrite {input} {output}}
@@ -64,8 +67,11 @@ services:
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       STORAGE_TTL_DAYS: 7
       MODELS_PATH: ${MODELS_PATH:-/app/models}
-      SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/semantic_segmenter.onnx}
-      SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://raw.githubusercontent.com/Josh-Uvi/DrawLift/main/backend/models/semantic_segmenter.onnx}
+      SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/best.safetensors}
+      SEGMENTER_MODEL_CONFIG_PATH: ${SEGMENTER_MODEL_CONFIG_PATH:-/app/models/config.yaml}
+      SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/best.safetensors}
+      SEGMENTER_MODEL_CONFIG_URL: ${SEGMENTER_MODEL_CONFIG_URL:-https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/config.yaml}
+      SEGMENTER_MODEL_INPUT_SIZE: ${SEGMENTER_MODEL_INPUT_SIZE:-512}
       PATH: /opt/libredwg/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       LD_LIBRARY_PATH: /opt/libredwg/lib
       DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-dwgwrite {input} {output}}
@@ -92,8 +98,11 @@ services:
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       STORAGE_TTL_DAYS: 7
       MODELS_PATH: ${MODELS_PATH:-/app/models}
-      SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/semantic_segmenter.onnx}
-      SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://raw.githubusercontent.com/Josh-Uvi/DrawLift/main/backend/models/semantic_segmenter.onnx}
+      SEGMENTER_MODEL_PATH: ${SEGMENTER_MODEL_PATH:-/app/models/best.safetensors}
+      SEGMENTER_MODEL_CONFIG_PATH: ${SEGMENTER_MODEL_CONFIG_PATH:-/app/models/config.yaml}
+      SEGMENTER_MODEL_URL: ${SEGMENTER_MODEL_URL:-https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/best.safetensors}
+      SEGMENTER_MODEL_CONFIG_URL: ${SEGMENTER_MODEL_CONFIG_URL:-https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/config.yaml}
+      SEGMENTER_MODEL_INPUT_SIZE: ${SEGMENTER_MODEL_INPUT_SIZE:-512}
       PATH: /opt/libredwg/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       LD_LIBRARY_PATH: /opt/libredwg/lib
       DWG_CONVERTER_COMMAND: ${DWG_CONVERTER_COMMAND:-dwgwrite {input} {output}}

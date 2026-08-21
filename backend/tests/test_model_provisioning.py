@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import pytest
 
+from app.ml import download_model as download_model_cli
 from app.ml import segmentation_model
 from app.ml.segmentation_model import (
     MAX_MODEL_SIZE_BYTES,
@@ -21,6 +22,7 @@ from app.ml.segmentation_model import (
     provision_segmentation_model,
     validate_segmentation_model,
 )
+from app.ml.yytsi_torch import YYTSI_CONFIG_FILENAME, YYTSI_MODEL_FILENAME
 from app.pipeline import PipelineContext, SegmenterStep
 from app.pipeline.steps.segmenter import MASK_LABELS, OnnxSemanticSegmenter
 
@@ -214,6 +216,20 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _write_yytsi_config(path: Path, *, image_size: tuple[int, int] = (128, 128)) -> Path:
+    path.write_text(
+        "data:\n"
+        f"  image_size: [{image_size[0]}, {image_size[1]}]\n"
+        "  normalize: true\n"
+        "  letterbox: true\n"
+        "model:\n"
+        "  encoder_name: resnet34\n"
+        "  encoder_weights: null\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_cli_provisions_reference_model(tmp_path: Path) -> None:
     """`python -m app.ml.download_model` provisions a valid model and reports it."""
     result = _run_cli("--models-dir", str(tmp_path))
@@ -259,6 +275,91 @@ def test_cli_force_replaces_corrupt_model(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert validate_segmentation_model(destination).passed
+
+
+def test_cli_check_validates_existing_yytsi_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--check` validates a `.safetensors + config.yaml` Torch bundle."""
+    weights_path = tmp_path / YYTSI_MODEL_FILENAME
+    weights_path.write_text("weights", encoding="utf-8")
+    _write_yytsi_config(tmp_path / YYTSI_CONFIG_FILENAME)
+
+    def fake_validate(*, weights_path: Path | str, config_path: Path | str, input_size: int):
+        class Report:
+            passed = True
+
+            @staticmethod
+            def summary() -> str:
+                return (
+                    f"weights path:   {weights_path}\n"
+                    f"config path:    {config_path}\n"
+                    f"input size:     {input_size}"
+                )
+
+        return Report()
+
+    monkeypatch.setattr("app.ml.download_model.validate_yytsi_bundle", fake_validate)
+
+    exit_code = download_model_cli.main(
+        ["--check", "--models-dir", str(tmp_path), "--filename", YYTSI_MODEL_FILENAME]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "weights path:" in captured.out
+    assert "config path:" in captured.out
+    assert "result: PASS" in captured.out
+
+
+def test_cli_provisions_yytsi_bundle_with_config_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Provisioning a `.safetensors` bundle resolves both weights and config."""
+
+    def fake_resolve(**kwargs: object) -> tuple[Path, Path]:
+        model_path = Path(str(kwargs["model_path"]))
+        config_path = Path(str(kwargs["config_path"]))
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        model_path.write_text("weights", encoding="utf-8")
+        _write_yytsi_config(config_path)
+        return model_path, config_path
+
+    def fake_validate(*, weights_path: Path | str, config_path: Path | str, input_size: int):
+        class Report:
+            passed = True
+
+            @staticmethod
+            def summary() -> str:
+                return (
+                    f"weights path:   {weights_path}\n"
+                    f"config path:    {config_path}\n"
+                    f"configured input size: {input_size}"
+                )
+
+        return Report()
+
+    monkeypatch.setattr("app.ml.download_model.resolve_yytsi_model_assets", fake_resolve)
+    monkeypatch.setattr("app.ml.download_model.validate_yytsi_bundle", fake_validate)
+
+    exit_code = download_model_cli.main(
+        [
+            "--models-dir",
+            str(tmp_path),
+            "--filename",
+            YYTSI_MODEL_FILENAME,
+            "--url",
+            "https://example.com/best.safetensors",
+            "--config-url",
+            "https://example.com/config.yaml",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert (tmp_path / YYTSI_MODEL_FILENAME).is_file()
+    assert (tmp_path / YYTSI_CONFIG_FILENAME).is_file()
+    assert "result: PASS" in captured.out
 
 
 def test_segmenter_step_runs_ml_path_with_provisioned_model(tmp_path: Path) -> None:

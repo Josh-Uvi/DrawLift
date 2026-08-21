@@ -86,15 +86,15 @@ DXF outputs use domain-oriented layers such as:
 
 | Aspect | `classic` | `ml` |
 | --- | --- | --- |
-| Walls | ✅ Detected via Canny + Hough lines | ⚠️ Requires ONNX model (not yet bundled) |
-| Doors | ❌ Always zero mask | ⚠️ Requires ONNX model |
-| Windows | ❌ Always zero mask | ⚠️ Requires ONNX model |
-| Rooms | ✅ Derived from wall mask regions | ⚠️ Requires ONNX model |
-| Text | ❌ Always zero mask | ⚠️ Requires ONNX model |
+| Walls | ✅ Detected via Canny + Hough lines | ✅ Default Yytsi Torch bundle predicts walls |
+| Doors | ❌ Always zero mask | ✅ Default Yytsi Torch bundle predicts doors |
+| Windows | ❌ Always zero mask | ✅ Default Yytsi Torch bundle predicts windows |
+| Rooms | ✅ Derived from wall mask regions | ✅ Derived from Yytsi structural masks |
+| Text | ❌ Always zero mask | ✅ Heuristically recovered from residual foreground |
 
 The `classic` segmenter uses thresholding, Canny edges, and probabilistic Hough line detection. It detects wall structures but emits zero-filled masks for doors, windows, and text. This means downstream vectorization and DXF output are structurally valid but semantically incomplete for real architectural drawings.
 
-The `ml` segmenter supports ONNX Runtime inference and produces all five mask classes when a suitable model is configured. `backend/models/semantic_segmenter.onnx` ships a small deterministic reference model (edge-energy segmentation expressed as ONNX ops) that satisfies the segmenter contract so the ML path works out of the box. `SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are configured by default in `.env.example` and `docker-compose.yml` (US-030): the URL acts as an auto-download fallback for fresh Docker model volumes, and Celery workers preload the configured model at startup via a `worker_process_init` handler. Trained weights can replace the reference model via `make download-model MODEL_URL=<url>` or `SEGMENTER_MODEL_URL`; every provisioned artifact is validated against the US-029 contract (CPU-only load, <100 MB, 5-class decodable output) by `app.ml.segmentation_model`. See [Stage 6 in TODO.md](./TODO.md) for the model acquisition plan.
+The `ml` segmenter now supports both ONNX Runtime inference and Torch bundle inference via `AutoMlSegmenter`. Docker/runtime defaults target the `Yytsi/floorplan-to-3d-walls` bundle (`best.safetensors` + `config.yaml`), which predicts four structural classes and is bridged back to the pipeline's stable five-label contract by deriving `rooms` and heuristically provisioning `text`. The legacy `backend/models/semantic_segmenter.onnx` reference model remains available as a compatibility fallback and for contract-validation utilities. `.env.example` and `docker-compose.yml` set `SEGMENTER_MODEL_PATH`, `SEGMENTER_MODEL_CONFIG_PATH`, `SEGMENTER_MODEL_URL`, and `SEGMENTER_MODEL_CONFIG_URL` by default; Celery workers preload whichever backend is configured via the `worker_process_init` handler. See [Stage 6 in TODO.md](./TODO.md) for the model acquisition plan.
 
 ## Classic vs ML segmentation comparison
 
@@ -113,9 +113,9 @@ Representative sample: a 240×320 floor plan containing exterior/interior walls,
 Observations:
 
 - The `classic` backend still provides structurally useful wall masks, but it cannot emit door, window, or text masks, so downstream DXF output lacks those semantic entities.
-- The bundled `ml` reference model activates all five labels on the same drawing and produces multiple vectorizable connected components for doors, windows, and text.
+- The default Yytsi-backed `ml` path activates all five labels on the same drawing and produces multiple vectorizable connected components for doors, windows, and text.
 - With the same fixture routed through the full PDF→DXF pipeline, the ML path emits entities on `DOORS`, `WINDOWS`, `ROOMS`, and `TEXT` layers; the classic path emits only `WALLS`.
-- The bundled reference model remains a deterministic edge-energy heuristic, not a trained floor-plan model. These numbers therefore prove the **5-label contract and DXF-layer plumbing**, not production-grade semantic accuracy.
+- The ONNX reference model remains available for contract validation, but the default Docker/runtime ML path now uses the trained Yytsi structural model with backend-specific post-processing for rooms/text. These numbers therefore prove the **5-label contract and DXF-layer plumbing**, while still depending on heuristic bridging for the two non-structural classes.
 
 Recommended lightweight open-source models for floor-plan segmentation:
 

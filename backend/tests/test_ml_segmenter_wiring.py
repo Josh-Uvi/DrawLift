@@ -22,7 +22,12 @@ from app.pipeline import (
     PipelineContext,
     SegmenterStep,
 )
-from app.pipeline.steps.segmenter import MASK_LABELS, OnnxSemanticSegmenter
+from app.pipeline.steps.segmenter import (
+    MASK_LABELS,
+    AutoMlSegmenter,
+    OnnxSemanticSegmenter,
+    TorchYytsiSegmenter,
+)
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 BUNDLED_MODEL_PATH = BACKEND_DIR / "models" / "semantic_segmenter.onnx"
@@ -161,3 +166,24 @@ def test_ml_segmenter_processes_multi_page_floor_plan_pdf(
         assert len(result.masks[label]) == 2
     assert np.count_nonzero(result.masks["walls"][0]) > 0
     assert np.count_nonzero(result.masks["walls"][1]) > 0
+
+
+def test_auto_ml_segmenter_selects_torch_backend_for_safetensors_path() -> None:
+    """AutoMlSegmenter dispatches `.safetensors` models to the Torch backend."""
+    backend = AutoMlSegmenter(model_path="/tmp/best.safetensors")._backend()
+
+    assert isinstance(backend, TorchYytsiSegmenter)
+
+
+def test_auto_ml_segmenter_selects_torch_backend_from_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Settings-driven `.safetensors` paths resolve to the Torch backend."""
+    monkeypatch.setenv("SEGMENTER_MODEL_PATH", "/tmp/models/best.safetensors")
+    get_settings.cache_clear()
+
+    try:
+        backend = AutoMlSegmenter()._backend()
+        assert isinstance(backend, TorchYytsiSegmenter)
+    finally:
+        get_settings.cache_clear()

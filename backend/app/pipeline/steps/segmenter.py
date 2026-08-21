@@ -15,6 +15,15 @@ from app.ml.segmentation_model import (
     SEGMENTATION_MODEL_FILENAME,
     download_segmentation_model,
 )
+from app.ml.yytsi_torch import (
+    YYTSI_CONFIG_FILENAME,
+    YYTSI_MODEL_FILENAME,
+    decode_yytsi_predictions,
+    get_yytsi_model,
+    load_yytsi_config,
+    prepare_yytsi_input,
+    resolve_yytsi_model_assets,
+)
 from app.pipeline.context import PipelineContext
 from app.pipeline.steps.base import PipelineStep
 
@@ -30,6 +39,10 @@ MaskPathMap = dict[str, list[Path]]
 
 class SemanticSegmenter(Protocol):
     """Protocol implemented by concrete semantic segmentation backends."""
+
+    def preload(self) -> None:
+        """Warm any process-local model/session cache."""
+        ...
 
     def segment(self, images: Sequence[np.ndarray]) -> SegmentationMasks:
         """Return per-label masks for every input image."""
@@ -245,6 +258,143 @@ class OnnxSemanticSegmenter:
         return masks
 
 
+class TorchYytsiSegmenter:
+    """Torch-backed segmenter for `Yytsi/floorplan-to-3d-walls` weights."""
+
+    def __init__(
+        self,
+        *,
+        model_path: Path | str | None = None,
+        model_url: str | None = None,
+        models_dir: Path | str | None = None,
+        input_size: tuple[int, int] | None = None,
+        config_path: Path | str | None = None,
+        config_url: str | None = None,
+    ) -> None:
+        self.model_path = Path(model_path) if model_path is not None else None
+        self.model_url = model_url
+        self.models_dir = Path(models_dir) if models_dir is not None else None
+        self.config_path = Path(config_path) if config_path is not None else None
+        self.config_url = config_url
+        self.input_size = input_size
+
+    def preload(self) -> None:
+        weights_path, config_path = self._resolve_assets()
+        get_yytsi_model(str(weights_path), str(config_path))
+
+    def segment(self, images: Sequence[np.ndarray]) -> SegmentationMasks:
+        if not images:
+            return _empty_mask_collection()
+
+        import torch
+
+        weights_path, config_path = self._resolve_assets()
+        config = load_yytsi_config(config_path)
+        image_size = self.input_size or config.image_size
+        model = get_yytsi_model(str(weights_path), str(config_path))
+
+        masks = _empty_mask_collection()
+        with torch.no_grad():
+            for image in images:
+                original_shape = image.shape[:2]
+                chw, rect = prepare_yytsi_input(
+                    image,
+                    image_size=image_size,
+                    normalize=config.normalize,
+                    letterbox=config.letterbox,
+                )
+                tensor = torch.from_numpy(chw).unsqueeze(0)
+                logits = model(tensor)
+                class_map = logits.argmax(dim=1).squeeze(0).to("cpu", torch.uint8).numpy()
+                page_masks = decode_yytsi_predictions(
+                    class_map=class_map,
+                    original_image=image,
+                    original_shape=original_shape,
+                    content_rect=rect,
+                    mask_labels=MASK_LABELS,
+                )
+                for label in MASK_LABELS:
+                    masks[label].extend(page_masks[label])
+        return masks
+
+    def _resolve_assets(self) -> tuple[Path, Path]:
+        settings = get_settings()
+        configured_path = self.model_path or _optional_path(settings.SEGMENTER_MODEL_PATH)
+        if configured_path is not None:
+            weights_path = configured_path.expanduser().resolve()
+        else:
+            model_dir = (self.models_dir or Path(settings.MODELS_PATH)).expanduser().resolve()
+            weights_path = model_dir / YYTSI_MODEL_FILENAME
+        configured_config_path = self.config_path or _optional_path(
+            settings.SEGMENTER_MODEL_CONFIG_PATH
+        )
+        config_path = (
+            configured_config_path.expanduser().resolve()
+            if configured_config_path is not None
+            else weights_path.with_name(YYTSI_CONFIG_FILENAME)
+        )
+        return resolve_yytsi_model_assets(
+            model_path=weights_path,
+            config_path=config_path,
+            model_url=self.model_url or settings.SEGMENTER_MODEL_URL,
+            config_url=self.config_url or settings.SEGMENTER_MODEL_CONFIG_URL,
+        )
+
+
+class AutoMlSegmenter:
+    """Dispatch to ONNX or Torch ML backends based on the configured model path."""
+
+    def __init__(
+        self,
+        *,
+        model_path: Path | str | None = None,
+        model_url: str | None = None,
+        models_dir: Path | str | None = None,
+        input_size: tuple[int, int] | None = None,
+    ) -> None:
+        self.model_path = Path(model_path) if model_path is not None else None
+        self.model_url = model_url
+        self.models_dir = Path(models_dir) if models_dir is not None else None
+        self.input_size = input_size
+
+    def preload(self) -> None:
+        self._backend().preload()
+
+    def segment(self, images: Sequence[np.ndarray]) -> SegmentationMasks:
+        return self._backend().segment(images)
+
+    def _backend(self) -> SemanticSegmenter:
+        model_path = self._resolve_model_path_hint()
+        suffix = model_path.suffix.lower()
+        if suffix == ".onnx":
+            return OnnxSemanticSegmenter(
+                model_path=model_path,
+                model_url=self.model_url,
+                models_dir=self.models_dir,
+                input_size=self.input_size,
+            )
+        if suffix == ".safetensors":
+            return TorchYytsiSegmenter(
+                model_path=model_path,
+                model_url=self.model_url,
+                models_dir=self.models_dir,
+                input_size=self.input_size,
+            )
+        raise ValueError(
+            f"Unsupported ML model type {model_path.suffix!r}; expected .onnx or .safetensors"
+        )
+
+    def _resolve_model_path_hint(self) -> Path:
+        settings = get_settings()
+        configured_path = self.model_path or _optional_path(settings.SEGMENTER_MODEL_PATH)
+        if configured_path is not None:
+            return configured_path.expanduser().resolve()
+        model_dir = (self.models_dir or Path(settings.MODELS_PATH)).expanduser().resolve()
+        if self.model_url and self.model_url.endswith(".safetensors"):
+            return model_dir / YYTSI_MODEL_FILENAME
+        return model_dir / DEFAULT_MODEL_FILENAME
+
+
 class SegmenterStep(PipelineStep):
     """Pipeline step that produces semantic masks from preprocessed pages."""
 
@@ -260,7 +410,7 @@ class SegmenterStep(PipelineStep):
     ) -> None:
         """Create the segmentation step with optional backend overrides."""
         self.output_dir = Path(output_dir) if output_dir is not None else None
-        self.ml_segmenter = ml_segmenter or OnnxSemanticSegmenter()
+        self.ml_segmenter = ml_segmenter or AutoMlSegmenter()
         self.classic_segmenter = classic_segmenter or ClassicCVSegmenter()
 
     def execute(self, context: PipelineContext) -> PipelineContext:
@@ -328,11 +478,11 @@ class SegmenterStep(PipelineStep):
 
 
 def preload_configured_segmentation_model() -> None:
-    """Preload the configured ONNX model once when a worker process starts."""
+    """Preload the configured ML model once when a worker process starts."""
     settings = get_settings()
     if settings.SEGMENTER_MODEL_PATH is None and settings.SEGMENTER_MODEL_URL is None:
         return
-    OnnxSemanticSegmenter().preload()
+    AutoMlSegmenter().preload()
 
 
 def _empty_mask_collection() -> SegmentationMasks:
