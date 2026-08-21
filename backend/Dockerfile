@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies, including the CPU Torch inference stack used by
+# the Yytsi `.safetensors + config.yaml` segmentation bundle.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

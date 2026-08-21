@@ -528,7 +528,7 @@
 
 # Stage 6 — ML Model & DWG Converter
 
-> **Goal:** Acquire a pre-trained ONNX floor-plan segmentation model, wire it into the ML segmenter path, and build a `libredwg` Docker sidecar for true DXF→DWG conversion. These are the two critical blockers preventing the pipeline from producing production-quality output.
+> **Goal:** Acquire a production-ready floor-plan segmentation model, wire it into the ML segmenter path, and build a `libredwg` Docker sidecar for true DXF→DWG conversion. These are the two critical blockers preventing the pipeline from producing production-quality output.
 
 ## Epic 6.1 — ML Model Acquisition
 
@@ -562,7 +562,7 @@
   - [x] T-099 — Verify ONNX inference input/output tensor shapes match `OnnxSemanticSegmenter` expectations
   - [x] T-100 — Add integration test for ML segmenter with real model file
 - **Implementation notes:**
-  - `.env.example` and the `backend`/`worker`/`beat` Compose services set `SEGMENTER_MODEL_PATH` plus a `SEGMENTER_MODEL_URL` auto-download fallback (the reference model served from this repository's `main` branch), so fresh Docker models volumes self-provision. Celery workers preload the configured model via a `worker_process_init` signal handler. Integration tests draw floor plans into real PDFs and run PDF parsing → preprocessing → ML segmentation end to end.
+  - Follow-up Torch wiring now defaults Docker/runtime environments to the `Yytsi/floorplan-to-3d-walls` bundle (`best.safetensors` + `config.yaml`) via `SEGMENTER_MODEL_PATH`, `SEGMENTER_MODEL_CONFIG_PATH`, `SEGMENTER_MODEL_URL`, and `SEGMENTER_MODEL_CONFIG_URL`. `AutoMlSegmenter` dispatches by file extension (`.onnx` → ONNX Runtime, `.safetensors` → Torch/Yytsi), and Celery workers preload the configured backend via `worker_process_init` so configuration errors surface on startup.
 
 ### US-031 · As a user, I want ML segmentation producing all five mask classes
 
@@ -577,7 +577,7 @@
   - [x] T-102 — Update `SEGMENTER_MODEL_INPUT_SIZE` if model requires different resolution (e.g. 256×256 for CubiCasa5K)
   - [x] T-103 — Compare classic vs ML output quality on sample floor plan and document results
 - **Implementation notes:**
-  - The bundled reference model emits all five labels for floor plans containing walls, doors, windows, and text; `app.ml.comparison.compare_segmenters` produces reproducible per-label coverage/reporting. `check_model_input_size` verifies the configured `SEGMENTER_MODEL_INPUT_SIZE` against a model's declared input dims (and `make validate-model` reports it). The full PDF→DXF pipeline with `segmenter: "ml"` emits DOORS/WINDOWS/TEXT entities, which the classic backend cannot produce. See [Classic vs ML comparison](./pipeline.md#classic-vs-ml-segmentation-comparison).
+  - The Yytsi Torch bundle predicts four structural classes (`floor`, `wall`, `door`, `window`). The backend preserves the existing five-class contract by deriving `rooms` from structural masks and heuristically provisioning `text` from residual foreground blobs. `SEGMENTER_MODEL_INPUT_SIZE=512` now matches the published Yytsi bundle defaults, while the legacy ONNX path remains available as a compatibility fallback. The full PDF→DXF pipeline with `segmenter: "ml"` continues to emit DOORS/WINDOWS/TEXT entities, which the classic backend cannot produce. See [Classic vs ML comparison](./pipeline.md#classic-vs-ml-segmentation-comparison).
 
 ## Epic 6.3 — DWG Converter Sidecar
 
@@ -864,4 +864,4 @@ Stage 6 (ML & DWG)                    ▼
 
 ---
 
-_Document version 1.3 — updated 2026-08-18: US-031 implemented (ML five-class masks, input-size validation, classic vs ML comparison documented, DXF entity coverage). US-001 ✅ Done; US-002 → US-031 👀 In Review; US-032 🟦 Todo._
+_Document version 1.4 — updated 2026-08-21: Docker/runtime ML defaults now use the Yytsi Torch bundle with five-class contract bridging, worker preload auto-selects ONNX vs Torch backends, and the full backend suite remains green. US-001 ✅ Done; US-002 → US-032 👀 In Review._

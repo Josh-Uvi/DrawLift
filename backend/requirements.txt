@@ -12,6 +12,11 @@ opencv-python-headless==4.*
 numpy==2.*
 onnxruntime==1.*
 onnx==1.*
+torch==2.12.*
+torchvision==0.27.*
+segmentation-models-pytorch==0.5.*
+safetensors==0.8.*
+PyYAML==6.0.*
 ezdxf==1.*
 trimesh==4.*
 shapely==2.*

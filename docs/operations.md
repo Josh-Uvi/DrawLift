@@ -61,17 +61,34 @@ make download-model MODEL_URL=<url>       # download trained weights instead
 make validate-model                       # validate model contract + configured input size
 ```
 
-Every provisioned artifact is validated (exists, <100 MB, CPU-only ONNX
-Runtime load, 5-class decodable output). `make validate-model` also verifies
-that the configured `SEGMENTER_MODEL_INPUT_SIZE` matches the model's declared
-input dimensions. Invalid downloads are removed.
+Every provisioned artifact is validated. ONNX artifacts are checked for
+existence, <100 MB size, CPU-only ONNX Runtime loading, and 5-class decodable
+output; Torch Yytsi bundles validate the paired `best.safetensors` +
+`config.yaml` assets, confirm the configured input size matches the bundle, and
+exercise CPU inference. Invalid downloads are removed.
 
-`SEGMENTER_MODEL_PATH` and `SEGMENTER_MODEL_URL` are set by default in
-`.env.example` and `docker-compose.yml`; the URL is used as an auto-download
-fallback when the model file is missing (e.g. a fresh Docker models volume).
-Celery workers preload the configured model once per process at startup
-(`worker_process_init`), so misconfiguration surfaces in worker logs
+Docker/runtime defaults now point at the Yytsi Hugging Face bundle:
+
+- `SEGMENTER_MODEL_PATH=./models/best.safetensors`
+- `SEGMENTER_MODEL_CONFIG_PATH=./models/config.yaml`
+- `SEGMENTER_MODEL_URL=https://huggingface.co/Yytsi/floorplan-to-3d-walls/.../best.safetensors`
+- `SEGMENTER_MODEL_CONFIG_URL=https://huggingface.co/Yytsi/floorplan-to-3d-walls/.../config.yaml`
+- `SEGMENTER_MODEL_INPUT_SIZE=512`
+
+Celery workers preload the configured ML backend once per process at startup
+(`worker_process_init`), so ONNX/Torch misconfiguration surfaces in worker logs
 immediately.
+
+To provision the Yytsi bundle manually from the backend package root:
+
+```bash
+python -m app.ml.download_model \
+  --models-dir ./models \
+  --filename best.safetensors \
+  --config-filename config.yaml \
+  --url https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/best.safetensors \
+  --config-url https://huggingface.co/Yytsi/floorplan-to-3d-walls/resolve/main/config.yaml
+```
 
 ## Hybrid local workflow
 
