@@ -17,7 +17,9 @@ repos:
         name: Frontend lint (ESLint)
         entry: >-
           bash -c 'cd frontend && created=0;
-          if [ ! -d node_modules ]; then npm ci --no-audit --no-fund && created=1; fi;
+          if [ ! -x node_modules/.bin/eslint ] || [ ! -x node_modules/.bin/prettier ]; then
+            npm ci --no-audit --no-fund && created=1;
+          fi;
           npm run lint;
           status=$?;
           if [ "$created" -eq 1 ]; then rm -rf node_modules; fi;
@@ -30,7 +32,9 @@ repos:
         name: Frontend format check (Prettier)
         entry: >-
           bash -c 'cd frontend && created=0;
-          if [ ! -d node_modules ]; then npm ci --no-audit --no-fund && created=1; fi;
+          if [ ! -x node_modules/.bin/prettier ] || [ ! -x node_modules/.bin/eslint ]; then
+            npm ci --no-audit --no-fund && created=1;
+          fi;
           npm run format:check;
           status=$?;
           if [ "$created" -eq 1 ]; then rm -rf node_modules; fi;
