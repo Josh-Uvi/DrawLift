@@ -23,15 +23,18 @@ from app.pipeline.steps.glb_writer import GlbWriterStep
 from app.pipeline.steps.pdf_parser import PdfParserStep
 from app.pipeline.steps.preprocessor import OpenCVPreprocessor
 from app.pipeline.steps.segmenter import (
+    AutoMlSegmenter,
     ClassicCVSegmenter,
     OnnxSemanticSegmenter,
     SegmenterStep,
+    TorchYytsiSegmenter,
     preload_configured_segmentation_model,
 )
 from app.pipeline.steps.vectorizer import VectorizerStep
 
 __all__ = [
     "ClassicCVSegmenter",
+    "AutoMlSegmenter",
     "DxfWriterStep",
     "DwgConverterStep",
     "GlbWriterStep",
@@ -50,6 +53,7 @@ __all__ = [
     "Point3D",
     "RoomPrimitive",
     "SegmenterStep",
+    "TorchYytsiSegmenter",
     "SlabGenerator",
     "SlabPrimitive",
     "TextPrimitive",

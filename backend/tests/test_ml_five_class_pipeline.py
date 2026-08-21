@@ -28,7 +28,7 @@ from app.pipeline import (
     SegmenterStep,
     VectorizerStep,
 )
-from app.pipeline.steps.segmenter import MASK_LABELS, OnnxSemanticSegmenter
+from app.pipeline.steps.segmenter import MASK_LABELS, OnnxSemanticSegmenter, TorchYytsiSegmenter
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 BUNDLED_MODEL_PATH = BACKEND_DIR / "models" / "semantic_segmenter.onnx"
@@ -151,6 +151,59 @@ def test_ml_masks_cover_all_five_labels_via_settings(
     for label in MASK_LABELS:
         assert masks[label][0].shape == (240, 320)
         assert np.count_nonzero(masks[label][0]) > 0, f"ML returned an empty {label} mask"
+
+
+def test_torch_ml_masks_cover_all_five_labels_via_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Settings-driven Torch segmenter covers all five labels with a Yytsi bundle."""
+    monkeypatch.setenv("SEGMENTER_MODEL_PATH", "/tmp/models/best.safetensors")
+    monkeypatch.setenv("SEGMENTER_MODEL_CONFIG_PATH", "/tmp/models/config.yaml")
+    get_settings.cache_clear()
+
+    class FakeModel:
+        def __call__(self, tensor: object):
+            import torch
+
+            shape = getattr(tensor, "shape")
+            _, _channels, height, width = shape
+            output = torch.zeros((1, 4, height, width), dtype=torch.float32)
+            output[:, 1, 30 : height - 30, 30:38] = 10.0
+            output[:, 1, 30 : height - 30, width - 38 : width - 30] = 10.0
+            output[:, 1, 30:38, 30 : width - 30] = 10.0
+            output[:, 1, height - 38 : height - 30, 30 : width - 30] = 10.0
+            output[:, 2, height // 2 : height // 2 + 20, width // 2 - 20 : width // 2 + 20] = 10.0
+            output[:, 3, 56:72, width // 2 : width // 2 + 70] = 10.0
+            return output
+
+    monkeypatch.setattr(
+        "app.pipeline.steps.segmenter.resolve_yytsi_model_assets",
+        lambda **_: (Path("/tmp/models/best.safetensors"), Path("/tmp/models/config.yaml")),
+    )
+    monkeypatch.setattr(
+        "app.pipeline.steps.segmenter.load_yytsi_config",
+        lambda _: type(
+            "Cfg",
+            (),
+            {
+                "image_size": (128, 128),
+                "normalize": True,
+                "letterbox": True,
+            },
+        )(),
+    )
+    monkeypatch.setattr("app.pipeline.steps.segmenter.get_yytsi_model", lambda *_: FakeModel())
+
+    try:
+        segmenter = TorchYytsiSegmenter()
+        masks = segmenter.segment([create_five_class_floor_plan()])
+    finally:
+        get_settings.cache_clear()
+
+    assert set(masks) == set(MASK_LABELS)
+    for label in MASK_LABELS:
+        assert masks[label][0].shape == (240, 320)
+        assert np.count_nonzero(masks[label][0]) > 0, f"Torch ML returned an empty {label} mask"
 
 
 def test_ml_pipeline_dxf_includes_door_window_text_entities(
