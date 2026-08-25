@@ -34,7 +34,7 @@
 
 `area:frontend` · `area:backend` · `area:devops` · `area:ml` · `area:docs`
 `type:bug` · `type:chore` · `type:spike` · `type:feature`
-`epic:p1-scaffold` · `epic:p2-pdf` · `epic:p3-vectorize` · `epic:p4-3d` · `epic:p5-polish` · `epic:p6-ml-dwg`
+`epic:p1-scaffold` · `epic:p2-pdf` · `epic:p3-vectorize` · `epic:p4-3d` · `epic:p5-polish` · `epic:p6-ml-dwg` · `epic:p7-production` · `epic:p8-saas-billing`
 
 ---
 
@@ -48,9 +48,11 @@
 | 3   | **Phase 3 — 2D Vectorization** | PDF → DXF (core value)           | 👀 In Review   | 5       | 16    |
 | 4   | **Phase 4 — 3D Extrusion**     | Walls → 3D model                 | 👀 In Review   | 4       | 13    |
 | 5   | **Phase 5 — Polish & DWG**     | Production-ready with DWG export | 👀 In Review   | 4       | 14    |
-| 6   | **Phase 6 — ML Model & DWG**   | ONNX segmentation + libredwg DWG | 🟦 Todo        | 4       | 13    |
+| 6   | **Phase 6 — ML Model & DWG**   | ONNX segmentation + libredwg DWG | ✅ Done        | 4       | 13    |
+| 7   | **Phase 7 — Production Core**  | Auth, tenancy, hardening, storage, observability, deployment | 🟦 Todo | 12 | 50 |
+| 8   | **Phase 8 — SaaS & Billing**   | Plans, Stripe, metering, experience, launch docs | 🟦 Todo | 12 | 45 |
 
-**Total: 32 user stories · 107 actionable tasks**
+**Total: 56 user stories · 202 actionable tasks**
 
 ---
 
@@ -597,6 +599,392 @@
 - **Implementation notes:**
   - The GNU LibreDWG image is built from the official 0.13.3 source tarball and installed into a shared `/opt/libredwg` volume that the `backend`, `worker`, and `beat` services mount read-only. Compose auto-configures `DWG_CONVERTER_COMMAND='dwgwrite {input} {output}'`; the image provides a compatibility wrapper translating that two-positional-args contract to LibreDWG's native `dwgwrite -o OUTFILE INFILE` CLI. The runtime step now prefers `dxf2dwg` first, then `dwgwrite`, before falling back to ODA FileConverter.
 
+# Stage 7 — Phase 7: Production Core (Security, Tenancy, Infrastructure)
+
+> **Goal:** Make the platform safe and operable for real, paying users: authentication, per-user isolation, hardening, object storage, observability, cancellation, production deployment, and compliance.
+
+## Epic 7.1 — Identity and Multi-tenancy
+
+### US-033 · As a visitor, I want to create an account and sign in so my conversions are private
+
+- **Priority:** P0 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `area:frontend`, `type:feature`, `epic:p7-production` · **Issue:** [#60](https://github.com/Josh-Uvi/DrawLift/issues/60)
+- **Acceptance Criteria:**
+  - [ ] Email+password registration and login with Argon2 password hashing
+  - [ ] Login issues a short-lived access token and an httpOnly refresh cookie
+  - [ ] `GET /api/v1/me` returns the current user profile
+  - [ ] Every `/api/v1/jobs*` endpoint returns 401 without valid auth
+  - [ ] `/login` and `/register` pages with field validation, duplicate-email error, and loading/disabled states
+  - [ ] Header shows sign-in/sign-out state based on auth status
+- **Tasks:**
+  - [ ] T-108 — Add Alembic migration creating the users table
+  - [ ] T-109 — Implement auth service (hashing, token issue, verify) in `backend/app/auth/`
+  - [ ] T-110 — Add `get_current_user` FastAPI dependency and apply it to job routes
+  - [ ] T-111 — Add frontend auth context, `/login` and `/register` routes, and protected layout
+  - [ ] T-112 — Add pytest coverage for registration, login, `/me`, and token expiry
+
+### US-034 · As a user, I want my jobs visible only to me
+
+- **Priority:** P0 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p7-production` · **Issue:** [#61](https://github.com/Josh-Uvi/DrawLift/issues/61)
+- **Acceptance Criteria:**
+  - [ ] `jobs` table has an indexed `user_id` foreign key
+  - [ ] Job list, detail, pages, download, retry, and delete enforce ownership and return 404 for foreign jobs
+  - [ ] Admin role can view all jobs
+  - [ ] History page shows only the current user's jobs
+  - [ ] Pre-tenant rows are marked legacy and only visible to admins
+- **Tasks:**
+  - [ ] T-113 — Add Alembic migration for `jobs.user_id` FK and index
+  - [ ] T-114 — Apply ownership guard helper to all job endpoints
+  - [ ] T-115 — Add admin-role bypass for operator support
+  - [ ] T-116 — Add tests for cross-user access denial and admin access
+
+## Epic 7.2 — Security Hardening
+
+### US-035 · As a security owner, I want stack traces hidden from ordinary users
+
+- **Priority:** P1 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p7-production` · **Issue:** [#62](https://github.com/Josh-Uvi/DrawLift/issues/62)
+- **Acceptance Criteria:**
+  - [ ] `error_trace` is omitted from API responses unless the caller is admin or `DEBUG` mode is enabled
+  - [ ] User-facing `error_msg` is mapped from a friendly error catalog covering upload, parser, pipeline, and converter failures
+  - [ ] `docs/api.md` documents the trace-hiding behavior
+- **Tasks:**
+  - [ ] T-117 — Serialize `error_trace` conditionally in JobStatus responses
+  - [ ] T-118 — Build friendly error-message catalog and map stored failures
+  - [ ] T-119 — Add tests covering trace hiding for users vs admins
+
+### US-036 · As a user, I want clear actionable feedback when my PDF cannot be accepted
+
+- **Priority:** P0 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p7-production` · **Issue:** [#63](https://github.com/Josh-Uvi/DrawLift/issues/63)
+- **Acceptance Criteria:**
+  - [ ] Uploads larger than `MAX_UPLOAD_SIZE_MB` (default 50 MB) are rejected before enqueue with an actionable 400/413
+  - [ ] PDFs with more pages than `MAX_PAGES` (default 20) are rejected before conversion starts with a clear error
+  - [ ] Password-protected PDFs are detected at upload and rejected with an actionable 400
+  - [ ] Magic-byte sniffing validates uploads in addition to extension and MIME checks
+  - [ ] Limits are documented in `docs/api.md` and surfaced in frontend help text
+- **Tasks:**
+  - [ ] T-120 — Add streaming upload size guard
+  - [ ] T-121 — Add PyMuPDF encryption and page-count pre-checks
+  - [ ] T-122 — Add `MAX_UPLOAD_SIZE_MB` and `MAX_PAGES` settings
+  - [ ] T-123 — Add tests incl. oversized and encrypted PDF fixtures
+
+### US-037 · As an operator, I want rate limits and per-user fairness on conversions
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p7-production` · **Issue:** [#64](https://github.com/Josh-Uvi/DrawLift/issues/64)
+- **Acceptance Criteria:**
+  - [ ] `POST /api/v1/jobs` is rate limited per user (default 10/hour) with a Redis-backed counter
+  - [ ] Rate-limited requests are rejected with 429 and a `Retry-After` header
+  - [ ] Per-user concurrency cap on active (queued+processing) jobs (default 2) rejects new jobs with a clear message
+  - [ ] Limits are configurable via env and documented in `docs/operations.md`
+  - [ ] History UI signals the capped state when a concurrency limit is hit
+- **Tasks:**
+  - [ ] T-124 — Implement Redis-backed rate limiter utility
+  - [ ] T-125 — Enforce active-job concurrency guard in job creation
+  - [ ] T-126 — Add rate-limit and concurrency tests
+
+### US-038 · As an operator, I want uploads scanned for malware before processing
+
+- **Priority:** P2 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:devops`, `type:feature`, `epic:p7-production` · **Issue:** [#65](https://github.com/Josh-Uvi/DrawLift/issues/65)
+- **Acceptance Criteria:**
+  - [ ] Optional `clamav` service in `docker-compose.yml` with a healthcheck
+  - [ ] Uploads are scanned after saving and before Celery enqueue
+  - [ ] Infected files are rejected with a stored reason and the file is removed
+  - [ ] `SCAN_FAIL_POLICY` env selects fail-open (dev) or fail-closed (prod) when the scanner is unavailable
+  - [ ] Scanner-disabled mode skips gracefully and `/health` reflects scanner status
+- **Tasks:**
+  - [ ] T-127 — Add clamav sidecar and healthcheck to `docker-compose.yml`
+  - [ ] T-128 — Wire scan step into the upload flow with fail-policy switch
+  - [ ] T-129 — Add tests using EICAR test fixtures
+
+## Epic 7.3 — Storage, Observability, and Control
+
+### US-039 · As an operator, I want job files stored in S3-compatible object storage
+
+- **Priority:** P1 · **Effort:** L · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p7-production` · **Issue:** [#66](https://github.com/Josh-Uvi/DrawLift/issues/66)
+- **Acceptance Criteria:**
+  - [ ] `StorageBackend` protocol defines save/get/delete and presigned_url
+  - [ ] `STORAGE_BACKEND=local|s3` selects LocalStorage (current behavior) or S3Storage
+  - [ ] Downloads serve expiring presigned URLs when the S3 backend is active
+  - [ ] TTL cleanup no-ops safely on S3 and lifecycle policy guidance is documented
+  - [ ] Hybrid host/Docker development workflow stays unchanged
+  - [ ] Bucket/IAM runbook added to `docs/operations.md`
+- **Tasks:**
+  - [ ] T-130 — Refactor `app/storage/local.py` behind a `StorageBackend` protocol
+  - [ ] T-131 — Implement S3 adapter with boto3
+  - [ ] T-132 — Serve presigned URLs from the download endpoint on S3
+  - [ ] T-133 — Wire `S3_BUCKET`, `S3_REGION`, and `S3_PRESIGN_TTL_SECONDS` settings
+  - [ ] T-134 — Add S3 adapter tests with moto
+
+### US-040 · As an operator, I want metrics, structured logs, and a readiness dashboard for the service
+
+- **Priority:** P1 · **Effort:** L · **Status:** 🟦 Todo · **Labels:** `area:devops`, `type:feature`, `epic:p7-production` · **Issue:** [#67](https://github.com/Josh-Uvi/DrawLift/issues/67)
+- **Acceptance Criteria:**
+  - [ ] Backend exposes Prometheus `/metrics`
+  - [ ] Metrics include uploads, queue depth, job duration, per-step duration, failure counts by class, and active SSE streams
+  - [ ] API and worker emit structured JSON logs with request-id correlation
+  - [ ] Grafana dashboard JSON and an observability Compose profile (Prometheus + Grafana) ship
+  - [ ] Alert rules are documented
+- **Tasks:**
+  - [ ] T-135 — Add Prometheus instrumentation to API and worker
+  - [ ] T-136 — Add structured logging middleware with request-id correlation
+  - [ ] T-137 — Add observability Compose profile
+  - [ ] T-138 — Add Grafana dashboard JSON and alert rules doc
+  - [ ] T-139 — Add metrics naming and label tests
+
+### US-041 · As a user, I want to cancel a queued or running conversion
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `area:frontend`, `type:feature`, `epic:p7-production` · **Issue:** [#68](https://github.com/Josh-Uvi/DrawLift/issues/68)
+- **Acceptance Criteria:**
+  - [ ] `POST /api/v1/jobs/{id}/cancel` revokes queued tasks and marks the job cancelled
+  - [ ] Running jobs cancel cooperatively via a flag checked between pipeline steps
+  - [ ] `cancelled` status appears in API responses, SSE events, history, and job page as a terminal state
+  - [ ] Cancel button is enabled only while the job is queued or processing
+  - [ ] Cancelled jobs are deletable but not retryable
+- **Tasks:**
+  - [ ] T-140 — Add cancel endpoint with Celery revoke
+  - [ ] T-141 — Add cooperative cancel flag check between pipeline steps
+  - [ ] T-142 — Extend status enum with `cancelled` and emit SSE event
+  - [ ] T-143 — Add cancel button and state handling in the frontend
+  - [ ] T-144 — Add endpoint and orchestrator cancel tests
+
+## Epic 7.4 — Deployment and Compliance
+
+### US-042 · As an operator, I want hardened production containers and a production compose profile
+
+- **Priority:** P0 · **Effort:** L · **Status:** 🟦 Todo · **Labels:** `area:devops`, `type:feature`, `epic:p7-production` · **Issue:** [#69](https://github.com/Josh-Uvi/DrawLift/issues/69)
+- **Acceptance Criteria:**
+  - [ ] Multi-stage images run as non-root with no source bind mounts and no `--reload`
+  - [ ] `docker-compose.prod.yml` defines resource limits, restart policies, healthchecks, and pinned base images
+  - [ ] Secrets are supplied via env or a secret manager with no default credentials
+  - [ ] HTTPS termination example (Caddy) provided; CORS restricted to real origins; `DEBUG=false` by default
+  - [ ] CI runs a Trivy image scan
+  - [ ] Hardening steps documented in `docs/operations.md`
+- **Tasks:**
+  - [ ] T-145 — Harden backend and frontend Dockerfiles (non-root, slim runtime)
+  - [ ] T-146 — Add `docker-compose.prod.yml` and `.env.production.example`
+  - [ ] T-147 — Add Caddy/TLS termination example and CORS/secrets guidance
+  - [ ] T-148 — Add Trivy image scan job to CI
+  - [ ] T-149 — Update operations doc with production hardening steps
+
+### US-043 · As a developer, I want CI/CD that publishes images and keeps dependencies safe
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:devops`, `type:chore`, `epic:p7-production` · **Issue:** [#70](https://github.com/Josh-Uvi/DrawLift/issues/70)
+- **Acceptance Criteria:**
+  - [ ] Release tags publish tagged images to GHCR
+  - [ ] Deployments run migrations as a pre-step with rollback guidance
+  - [ ] Dependabot enabled for pip, npm, Docker, and GitHub Actions
+  - [ ] CodeQL and secret-scan jobs run on PRs
+  - [ ] Coverage reports are uploaded as CI artifacts
+  - [ ] Release checklist documented
+- **Tasks:**
+  - [ ] T-150 — Add GHCR image publish workflow on release tags
+  - [ ] T-151 — Configure Dependabot and security workflows
+  - [ ] T-152 — Add migration deploy step and rollback doc
+  - [ ] T-153 — Add coverage reporting to CI
+
+### US-044 · As a compliance owner, I want audit trails, data-retention controls, and legal basics
+
+- **Priority:** P2 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p7-production` · **Issue:** [#71](https://github.com/Josh-Uvi/DrawLift/issues/71)
+- **Acceptance Criteria:**
+  - [ ] `audit_logs` records upload, download, delete, retry, cancel, and account events with actor, action, job, IP, and timestamp
+  - [ ] Users can export their job data and metadata as JSON
+  - [ ] Users can delete their account, cascading to jobs and stored files
+  - [ ] Retention honors `STORAGE_TTL_DAYS`
+  - [ ] Placeholder Privacy Policy and Terms pages linked from the footer
+- **Tasks:**
+  - [ ] T-154 — Add audit log model and recording hooks
+  - [ ] T-155 — Add export-my-data and delete-account endpoints
+  - [ ] T-156 — Add legal placeholder pages and footer links
+  - [ ] T-157 — Add audit, export, and deletion tests
+
+# Stage 8 — Phase 8: SaaS Product & Billing
+
+> **Goal:** Turn the hardened platform into a sellable, self-serve product: plans and entitlements, Stripe subscriptions, usage metering, account/onboarding experience, UX polish, conversion quality, and launch documentation.
+
+## Epic 8.1 — Monetization
+
+### US-045 · As a product owner, I want plans and entitlements controlling what users can do
+
+- **Priority:** P0 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#72](https://github.com/Josh-Uvi/DrawLift/issues/72)
+- **Acceptance Criteria:**
+  - [ ] Free and Pro plans defined as code-driven entitlement config
+  - [ ] Entitlements cover max upload MB, pages per month, concurrent jobs, allowed output formats, and segmenter availability
+  - [ ] `users.plan` field drives effective entitlements
+  - [ ] Job creation enforces entitlements and downloads gate output formats
+  - [ ] `GET /api/v1/entitlements` endpoint powers frontend feature flags
+  - [ ] Each entitlement rule is unit tested
+- **Tasks:**
+  - [ ] T-158 — Create entitlement config module and tests
+  - [ ] T-159 — Add `users.plan` migration and enforcement hooks
+  - [ ] T-160 — Add entitlements API endpoint
+  - [ ] T-161 — Add frontend entitlement hooks gating UI controls
+
+### US-046 · As a customer, I want to subscribe via Stripe and have my plan activate reliably
+
+- **Priority:** P0 · **Effort:** L · **Status:** 🟦 Todo · **Labels:** `area:backend`, `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#73](https://github.com/Josh-Uvi/DrawLift/issues/73)
+- **Acceptance Criteria:**
+  - [ ] Stripe customer is linked on signup
+  - [ ] Checkout Session purchases a plan
+  - [ ] Webhook endpoint verifies Stripe signatures
+  - [ ] `checkout.session.completed` and subscription `updated`/`deleted` events apply idempotently
+  - [ ] `subscriptions` table state drives entitlements
+  - [ ] Customer Portal link enables plan management and cancellation
+  - [ ] Test-mode runbook and fixture-based webhook tests exist
+- **Tasks:**
+  - [ ] T-162 — Integrate Stripe client and customer linking
+  - [ ] T-163 — Add checkout flow and `subscriptions` migration
+  - [ ] T-164 — Add webhook endpoint with signature verification and idempotency
+  - [ ] T-165 — Add customer portal link and plan state to the account UI
+  - [ ] T-166 — Add webhook fixture tests
+
+### US-047 · As a user, I want to see and understand my usage before I hit limits
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#74](https://github.com/Josh-Uvi/DrawLift/issues/74)
+- **Acceptance Criteria:**
+  - [ ] `usage_counters` tracks converted pages per user per monthly period
+  - [ ] Counter increments when jobs complete
+  - [ ] Job creation returns 429 with an upgrade hint when the monthly page budget is exhausted
+  - [ ] `GET /api/v1/usage` returns current period usage vs limit
+  - [ ] Upload form shows remaining pages hint and account page shows a usage bar
+- **Tasks:**
+  - [ ] T-167 — Add usage counter model and increment on completion
+  - [ ] T-168 — Add budget check at job creation and usage endpoint
+  - [ ] T-169 — Add frontend upload hint and account usage display
+
+## Epic 8.2 — Account, Onboarding, and Experience
+
+### US-048 · As a user, I want an account dashboard where I manage profile, plan, and history
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#75](https://github.com/Josh-Uvi/DrawLift/issues/75)
+- **Acceptance Criteria:**
+  - [ ] `/account` page with profile card including change password
+  - [ ] Plan card shows current plan, usage, and upgrade/portal actions
+  - [ ] History supports pagination and filename search
+  - [ ] Consistent empty, loading, and error states on account and history surfaces
+  - [ ] Unauthenticated visitors are redirected to login
+- **Tasks:**
+  - [ ] T-170 — Build account page shell and change-password flow
+  - [ ] T-171 — Wire plan and usage cards to entitlements/usage APIs
+  - [ ] T-172 — Add history pagination and search
+  - [ ] T-173 — Add account page checks and build verification
+
+### US-049 · As a visitor, I want a landing and onboarding experience that explains the product and pricing
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#76](https://github.com/Josh-Uvi/DrawLift/issues/76)
+- **Acceptance Criteria:**
+  - [ ] Landing page with hero, 3-step how-it-works, and sample output preview
+  - [ ] Pricing section driven from entitlement config
+  - [ ] Sign-up and sign-in CTAs route to auth pages
+  - [ ] Legal footer links present
+  - [ ] Upload workflow gated behind auth with a first-run onboarding hint
+  - [ ] Page metadata, landmarks, and focus order verified
+- **Tasks:**
+  - [ ] T-174 — Build landing sections and pricing from entitlements
+  - [ ] T-175 — Gate upload entry behind auth and add onboarding hint
+  - [ ] T-176 — Add footer and legal links
+  - [ ] T-177 — Verify accessibility and build
+
+### US-050 · As a user, I want confident, informative upload and progress experiences
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#77](https://github.com/Josh-Uvi/DrawLift/issues/77)
+- **Acceptance Criteria:**
+  - [ ] Upload shows a real progress bar via XHR
+  - [ ] Client-side validation uses entitlement limits for type and size before submit
+  - [ ] Progress tracker shows step name, percentage, and estimated-time hint
+  - [ ] Failure state shows friendly error and suggested next actions (retry, adjust settings)
+  - [ ] Cancel button integrated once US-041 lands
+  - [ ] Copy reviewed for clarity; toasts reserved for transient events
+- **Tasks:**
+  - [ ] T-178 — Implement XHR upload with progress and client validation
+  - [ ] T-179 — Improve progress tracker copy, ETA, and failure next-actions UI
+  - [ ] T-180 — Integrate cancel button
+  - [ ] T-181 — Copy and accessibility review with build checks
+
+### US-051 · As a user, I want to choose which pages are converted before starting
+
+- **Priority:** P1 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#78](https://github.com/Josh-Uvi/DrawLift/issues/78)
+- **Acceptance Criteria:**
+  - [ ] Upload flow shows numbered page thumbnails with select all/none
+  - [ ] `config.pages` is validated (1-based, unique, within page count and plan limits)
+  - [ ] Worker converts only selected pages
+  - [ ] Job detail records the selected pages
+  - [ ] Invalid selections return actionable 422 errors
+- **Tasks:**
+  - [ ] T-182 — Add page-list validation to `JobConfig` and a pre-check endpoint
+  - [ ] T-183 — Honor selected pages in the parser step/orchestrator
+  - [ ] T-184 — Build page selector UI in the upload flow
+  - [ ] T-185 — Add validation and pipeline filtering tests
+
+## Epic 8.3 — Quality, Notifications, and Launch
+
+### US-052 · As a user, I want the UI to feel polished: consistent empty, loading, and error states
+
+- **Priority:** P2 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#79](https://github.com/Josh-Uvi/DrawLift/issues/79)
+- **Acceptance Criteria:**
+  - [ ] Shared `StatusBadge` consolidates status colors and text labels everywhere
+  - [ ] Skeleton loaders on history and job pages
+  - [ ] Empty states with a primary CTA
+  - [ ] Error states offer retry where applicable
+  - [ ] Accessibility audit pass: focus order, ARIA labels, keyboard-dismissable modals, contrast
+  - [ ] Status color tokens documented in `docs/design-system.md`
+- **Tasks:**
+  - [ ] T-186 — Create shared `StatusBadge` and replace ad-hoc badges
+  - [ ] T-187 — Add skeleton/empty/error state components and wire pages
+  - [ ] T-188 — Accessibility audit pass
+  - [ ] T-189 — Update design-system doc and visual spot-checks
+
+### US-053 · As a user, I want email notifications when my conversions finish or fail
+
+- **Priority:** P2 · **Effort:** M · **Status:** 🟦 Todo · **Labels:** `area:backend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#80](https://github.com/Josh-Uvi/DrawLift/issues/80)
+- **Acceptance Criteria:**
+  - [ ] Notifier abstraction with console (dev default) and SMTP providers
+  - [ ] Job complete/failed emails include time-limited tokenised download links
+  - [ ] Per-user notification toggle stored on the profile
+  - [ ] Failed emails include the friendly error and a retry link
+  - [ ] Delivery failures never fail the job
+- **Tasks:**
+  - [ ] T-190 — Build notifier abstraction and SMTP provider
+  - [ ] T-191 — Add tokenised download endpoint for email links
+  - [ ] T-192 — Add notification preference toggle to profile and API
+  - [ ] T-193 — Add tests for content, toggle, and failure isolation
+
+### US-054 · As an ML engineer, I want trained segmentation weights hosted with an evaluation harness
+
+- **Priority:** P1 · **Effort:** L · **Status:** 🟦 Todo · **Labels:** `area:ml`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#81](https://github.com/Josh-Uvi/DrawLift/issues/81)
+- **Acceptance Criteria:**
+  - [ ] Candidate trained weights converted to the segmenter's 5-class contract
+  - [ ] `make validate-model` runs a regression fixture set of 3+ floor plan images
+  - [ ] Evaluation reports per-class IoU
+  - [ ] Selected weights are provisionable via `SEGMENTER_MODEL_URL`
+  - [ ] `docs/pipeline.md` refreshed with measured comparison, baselines, and known failure modes
+- **Tasks:**
+  - [ ] T-194 — Convert candidate model to the 5-class contract
+  - [ ] T-195 — Build evaluation harness and fixture corpus
+  - [ ] T-196 — Wire evaluation into `make validate-model` and CI smoke
+  - [ ] T-197 — Update `docs/pipeline.md` with measured comparison
+
+### US-055 · As a user, I want one-click access to every output my job produced
+
+- **Priority:** P2 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:backend`, `area:frontend`, `type:feature`, `epic:p8-saas-billing` · **Issue:** [#82](https://github.com/Josh-Uvi/DrawLift/issues/82)
+- **Acceptance Criteria:**
+  - [ ] `GET /jobs/{id}/download?format=zip` streams an archive of all available artifacts plus a job settings README
+  - [ ] Download UI lists each format's availability and size
+  - [ ] Buttons are disabled for missing artifacts with explanation copy
+  - [ ] Filenames include the job id and configuration hints
+- **Tasks:**
+  - [ ] T-198 — Add zip bundle endpoint with availability checks
+  - [ ] T-199 — Add download UI availability listing
+  - [ ] T-200 — Add bundle content and missing-artifact tests
+
+### US-056 · As an operator, I want a documented launch checklist and day-2 runbook
+
+- **Priority:** P3 · **Effort:** S · **Status:** 🟦 Todo · **Labels:** `area:docs`, `type:chore`, `epic:p8-saas-billing` · **Issue:** [#83](https://github.com/Josh-Uvi/DrawLift/issues/83)
+- **Acceptance Criteria:**
+  - [ ] `docs/launch-checklist.md` covers DNS/TLS, secrets rotation, backups, DR smoke test, monitoring verification, per-plan rate limits, and support contacts
+  - [ ] `docs/runbook.md` covers common incidents with actionable commands
+  - [ ] README links both documents
+- **Tasks:**
+  - [ ] T-201 — Write `docs/launch-checklist.md`
+  - [ ] T-202 — Write `docs/runbook.md` and add README links
+
 ---
 
 # Appendix A — GitHub Issue Management (via `gh` CLI & GitHub MCP)
@@ -692,6 +1080,7 @@ for label in \
   "area:frontend" "area:backend" "area:devops" "area:ml" "area:docs" \
   "type:bug" "type:chore" "type:spike" "type:feature" \
   "epic:p1-scaffold" "epic:p2-pdf" "epic:p3-vectorize" "epic:p4-3d" "epic:p5-polish" \
+  "epic:p6-ml-dwg" "epic:p7-production" "epic:p8-saas-billing" \
   "priority:p0" "priority:p1" "priority:p2" "priority:p3" \
   "status:blocked" "status:in-review"; do
     gh label create "$label" --color "0E8A16" --description "Auto-generated" 2>/dev/null || true
@@ -819,6 +1208,8 @@ The GitHub MCP server mirrors the `gh` CLI surface, so the bulk-creation script 
 | **Stage 4: 3D Extrusion**     | US-021 → US-024 | Walls → 3D model                 |
 | **Stage 5: Polish & DWG**     | US-025 → US-028 | Production-ready with DWG export |
 | **Stage 6: ML Model & DWG**   | US-029 → US-032 | ONNX model + libredwg sidecar    |
+| **Stage 7: Production Core**  | US-033 → US-044 | Security, tenancy, storage, observability, deployment, compliance |
+| **Stage 8: SaaS Product & Billing** | US-045 → US-056 | Plans, Stripe, metering, experience, launch docs |
 
 ---
 
@@ -860,8 +1251,14 @@ Stage 5 (Polish)                      ▼
                                        │
 Stage 6 (ML & DWG)                    ▼
   └── US-029 ── US-030 ── US-031 ── US-032
+                                       │
+Stage 7 (Production Core)              ▼
+  └── US-033 ── US-034 ── US-035 ── US-036 ── US-037 ── US-038 ── US-039 ── US-040 ── US-041 ── US-042 ── US-043 ── US-044
+                                       │
+Stage 8 (SaaS & Billing)               ▼
+  └── US-045 ── US-046 ── US-047 ── US-048 ── US-049 ── US-050 ── US-051 ── US-052 ── US-053 ── US-054 ── US-055 ── US-056
 ```
 
 ---
 
-_Document version 1.4 — updated 2026-08-21: Docker/runtime ML defaults now use the Yytsi Torch bundle with five-class contract bridging, worker preload auto-selects ONNX vs Torch backends, and the full backend suite remains green. US-001 ✅ Done; US-002 → US-032 👀 In Review._
+_Document version 2.0 — updated 2026-08-25: Added Stage 7 — Production Core (US-033 → US-044) and Stage 8 — SaaS Product & Billing (US-045 → US-056), with 95 new tasks (T-108 → T-202) covering auth, multi-tenancy, security hardening, object storage, observability, job cancellation, production deployment, compliance, plans/entitlements, Stripe billing, usage metering, account onboarding, UX polish, ML evaluation harness, and launch runbook docs. US-001 → US-032 done; US-033 → US-056 🟦 Todo._

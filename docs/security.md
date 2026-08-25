@@ -58,6 +58,23 @@ This document scopes current protections and realistic risks for DrawLift. The c
 - [ ] Use non-default database credentials and managed secrets.
 - [ ] Add structured audit logs for upload, download, retry, and delete actions.
 
+## Story mapping
+
+The hardening checklist above is scheduled as user stories (see [roadmap](./roadmap.md) Stages 7–8 and `TODO.md`):
+
+| Checklist item | Story |
+| --- | --- |
+| Add authentication and authorization | US-033 |
+| Associate jobs with users or tenants | US-034 |
+| Hide `error_trace` from ordinary users | US-035 |
+| Enforce upload size, page count, and conversion time limits | US-036 (limits), US-037 (rate limits and fairness) |
+| Antivirus/malware scanning for uploads | US-038 |
+| Move storage to S3-compatible object storage | US-039 |
+| Add rate limiting and queue quotas | US-037 |
+| Restricted containers, non-default credentials, managed secrets | US-042 |
+| Dependabot, lockfiles, image scanning, regular updates | US-043 |
+| Structured audit logs | US-044 |
+
 ## Security boundaries
 
 DrawLift validates and manages files; it does not guarantee that generated CAD output is semantically correct or safe to use as construction documentation. Human review remains required before professional use.

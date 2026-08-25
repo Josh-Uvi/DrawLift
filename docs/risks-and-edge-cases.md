@@ -48,9 +48,9 @@ DrawLift operates in a domain where input quality varies widely. This document l
 
 ## Recommended next controls
 
-1. Add upload and conversion limits.
-2. Add job cancellation.
-3. Add page selection before conversion.
-4. Add quality scoring or confidence indicators.
-5. Add admin/operator views for failed jobs and queue health.
-6. Add structured metrics for duration, failure type, input size, and output size.
+1. Add upload and conversion limits — scheduled: US-036 (limits) and US-037 (rate limits/fairness).
+2. Add job cancellation — scheduled: US-041.
+3. Add page selection before conversion — scheduled: US-051.
+4. Add quality scoring or confidence indicators — partially covered by the US-054 evaluation harness; confidence scoring remains deferred.
+5. Add admin/operator views for failed jobs and queue health — scheduled via metrics and dashboards in US-040.
+6. Add structured metrics for duration, failure type, input size, and output size — scheduled: US-040.

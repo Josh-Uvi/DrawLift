@@ -12,7 +12,7 @@ fileignoreconfig:
 - filename: frontend/package-lock.json
   checksum: 9abe9b9e245be5f3bde7e5df87c0ee67ec7152bbd879393c48c70dc0f43cddd1
 - filename: docs/TODO.md
-  checksum: 5d9f583d64bd16085685dab2b64155c145a12bfe62eab38dd0ab0132e77d4c38
+  checksum: f41c0c73d149d3087feca393fbf98e565c879845074c5d73d5dbeec3e6be48a7
 - filename: backend/app/api/v1/jobs_stream.py
   checksum: 6e6a351f846e5d70ba0879f6f78dc97b9ce7cff45062aa5e5c6492a7b062dfbc
 - filename: frontend/src/components/job/PageViewer.tsx
@@ -34,7 +34,7 @@ fileignoreconfig:
 - filename: backend/tests/test_placeholder_task_paths.py
   checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
 - filename: README.md
-  checksum: 14bbcd6830c9fa5cc57d64e4f0c3505652030d071017ef15bdb7d78baaa7ffc4
+  checksum: 2fa2e0000b9787c9dbfec4e85ad00ffb1a7dfa58770bb6718db43968deed29c1
 - filename: backend/tests/test_stale_job_recovery.py
   checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
 - filename: backend/tests/test_celery_worker_config.py
@@ -55,4 +55,8 @@ fileignoreconfig:
   checksum: e29427637656ff391de12b119b7a2182cfe750093383792a32b16fae9ec9ef95
 - filename: backend/tests/test_yytsi_torch_segmenter.py
   checksum: c2f4ac962c1696b33c3cb4a8d83c1bb7987cd3c0797640c7ed8d6c804b552e71
+- filename: docs/roadmap.md
+  checksum: 731b623acd568c5611efbe5b735b2a6bb81364e21e28c3a2a968be3aa7d83a0a
+- filename: scripts/stories.json
+  checksum: cd10bb7c16909e6fb9d2c24f0cdb04986b566542d0c2af92277d116d52422536
 version: "1.0"

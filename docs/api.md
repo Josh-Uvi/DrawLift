@@ -6,6 +6,8 @@ The API is implemented by FastAPI under `backend/app/api/v1`. All paths below ar
 
 There is no authentication in the current proof-of-concept. Treat every endpoint as single-user/local-development only until auth and per-user job isolation are added.
 
+**Planned:** US-033 adds authentication (short-lived tokens + httpOnly refresh cookie, `GET /me`) and US-034 adds per-user job isolation; US-035 hides `error_trace` from non-admin callers; US-036/US-037 add upload limits and rate limiting. See [roadmap](./roadmap.md) Stages 7–8.
+
 ## Endpoints
 
 | Method | Path | Success | Notes |
