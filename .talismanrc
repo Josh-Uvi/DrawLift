@@ -1,6 +1,8 @@
 fileignoreconfig:
 - filename: .github/workflows/project-sync.yml
-  checksum: f817f70193e5d38e8b49f7a2b79f79e6ad840d79ad0079b936760cdb3c22109
+  checksum: 64b4b0848f267a471ea7b16dbbebe32959cd27dc3074c4393c660b7bbda2ebae
+- filename: implementation_plan.md
+  checksum: ffc9aaf67d380e24f46fca314d4d317c208502dbe3f9000cd4b0fad245151055
 - filename: .env.example
   checksum: 23b408e452cfc4356275da395246166006df086c276f6d1f956a9f8033f9a757
 - filename: backend/alembic/env.py
