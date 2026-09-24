@@ -77,7 +77,10 @@ A white, rounded, bordered panel with optional title. Used to group upload, job 
 
 ## Future design work
 
-- Consolidate status badges into a shared component.
-- Document spacing, typography, and status colors as explicit tokens.
-- Add empty, loading, and error states for each page.
-- Add visual regression tests once the UI stabilizes.
+- Consolidate status badges into a shared component (scheduled: US-052).
+- Document spacing, typography, and status colors as explicit tokens (scheduled: US-052).
+- Add empty, loading, and error states for each page (scheduled: US-052).
+- Landing, onboarding, and pricing experiences (scheduled: US-049).
+- Upload progress, ETA hints, and guided failure recovery (scheduled: US-050).
+- Account dashboard and plan/usage self-service (scheduled: US-048).
+- Add visual regression tests once the UI stabilizes (deferred; see [roadmap](./roadmap.md)).

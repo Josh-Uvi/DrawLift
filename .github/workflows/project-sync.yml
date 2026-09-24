@@ -1,342 +1,335 @@
 # .github/workflows/project-sync.yml
 # ----------------------------------------------------------------------------
-# Automatically move issue cards on the "AI File Converter" GitHub Project
-# when activity happens. The goal: any push or PR that touches an issue should
-# move its card to the correct column on the board without human intervention.
+# Project Sync (gh-CLI based).
 #
-#   - Issue opened / reopened   -> Todo
-#   - PR opened / synchronized   -> In Review
-#   - PR merged / closed         -> Done (if all acceptance criteria checked)
-#                                 -> In Review (if criteria partially complete)
-#   - Commit pushed to main with "Closes #N" -> Done (if all criteria checked)
-#                                              -> In Review (if partial)
-#   - Issue closed               -> Done (if all criteria checked)
-#                                 -> In Review (if criteria partially complete)
+# Keeps the "AI File Converter" ProjectV2 board in sync with issue/PR events.
 #
-# Uses curl + jq directly (no actions/github-script) to avoid Node 20
-# deprecation warnings and give full control over error handling.
+# Event -> status matrix:
+#   issues.opened/reopened                        -> Issue       -> Todo
+#   issues.closed                                 -> Issue       -> Done (all checkboxes checked or none)
+#                                                                  In Review (otherwise)
+#   pull_request.opened/reopened/synchronize      -> PR           -> In Review
+#                                                   each closing-referenced issue -> In Review
+#   pull_request.closed + merged                  -> PR           -> Done
+#                                                   (linked issues handled by their own auto-close issues.closed events)
+#   pull_request.closed + not merged              -> PR           -> In Review
+#                                                   each closing-referenced issue -> Todo
+#   push                                          -> no trigger (GitHub natively auto-closes
+#                                                    Closes/Fixes/Resolves issues on the default branch;
+#                                                    that auto-close fires issues.closed, handled above)
+#
+# Assumptions / behavioral changes vs the old curl-based workflow:
+#   1. No `push` trigger (removes duplicate work + self-trigger REST close race).
+#   2. No `edited` triggers (edits must not reset card status).
+#   3. PR closed-without-merge is In Review (not Done); linked issues revert to Todo.
+#   4. PR opened-family propagates In Review to each closing-referenced issue.
+#   5. No hand-rolled REST issue-close PATCH (covered by native auto-close).
+#   6. Status vocabulary is Todo / In Review / Done (In Progress dropped, was unused).
+#
+# Tooling: gh + jq + bash + awk only (all preinstalled on ubuntu-latest).
+# No curl, no Node actions. Stdout carries return values only; diagnostics -> stderr.
 # ----------------------------------------------------------------------------
 name: Project Sync
 
 on:
   issues:
-    types: [opened, reopened, closed, edited]
+    types: [opened, reopened, closed]
   pull_request:
-    types: [opened, reopened, closed, synchronize, edited]
-  push:
-    branches: [main]
+    types: [opened, reopened, closed, synchronize]
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
-  # Note: User-owned Projects v2 require a PAT with 'project' scope.
-  # Set a PROJECT_TOKEN secret; the workflow uses it via the fallback below.
+
+concurrency:
+  group: project-sync-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   sync-project:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+      PROJECT_OWNER: ${{ vars.SYNC_PROJECT_OWNER || github.repository_owner }}
+      PROJECT_NUMBER: ${{ vars.SYNC_PROJECT_NUMBER || '1' }}
     steps:
       - name: Sync issue/PR to project board
-        env:
-          PROJECT_NUMBER: "1"
-          PROJECT_OWNER: "Josh-Uvi"
         run: |
           set -uo pipefail
 
-          # ----------------------------------------------------------------
-          # Configuration
-          # ----------------------------------------------------------------
-          STATUS_FIELD_NAME="Status"
-          COL_TODO="Todo"
-          COL_PROGRESS="In Progress"
-          COL_REVIEW="In Review"
-          COL_DONE="Done"
-          API_URL="https://api.github.com/graphql"
+          # --------------------------------------------------------------
+          # Helpers: log (stderr), die (red annotation + exit 1)
+          # --------------------------------------------------------------
+          log() { printf '%s\n' "$*" >&2; }
+          die() { printf '::error::%s\n' "$*" >&2; exit 1; }
 
-          # ----------------------------------------------------------------
-          # Helper: execute a GraphQL query/mutation via curl
-          # ----------------------------------------------------------------
-          graphql() {
+          # --------------------------------------------------------------
+          # gql <query> [gh -F/-f args...]: GraphQL via gh, raw JSON stdout.
+          # Dies on transport or GraphQL errors.
+          # --------------------------------------------------------------
+          gql() {
             local query="$1"
-            local vars="$2"
-            local payload
-            payload=$(jq -n --arg q "$query" --argjson v "$vars" '{query: $q, variables: $v}')
-            curl -s --retry 3 -X POST "$API_URL" \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$payload"
+            shift
+            local out
+            if ! out=$(gh api graphql -f query="$query" "$@" 2>&1); then
+              die "GraphQL call failed: $out (hint: PROJECT_TOKEN needs 'project' scope)"
+            fi
+            if printf '%s' "$out" | jq -e '.errors' >/dev/null 2>&1; then
+              die "GraphQL errors: $(printf '%s' "$out" | jq -r '.errors[].message' | tr '\n' '; ')"
+            fi
+            printf '%s' "$out"
           }
 
-          # ----------------------------------------------------------------
-          # 1) Query project + status field + option IDs
-          # ----------------------------------------------------------------
-          QUERY='query($login: String!, $number: Int!) {
-            user(login: $login) {
-              projectV2(number: $number) {
-                id
-                fields(first: 50) {
-                  nodes {
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      options { id name }
+          # Skip (green) only when the PAT is unset. Anything configured-but-broken fails red.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            printf '::warning::PROJECT_TOKEN secret not set — skipping project sync\n' >&2
+            exit 0
+          fi
+
+          # --------------------------------------------------------------
+          # Project metadata (globals): PROJECT_ID, STATUS_FIELD_ID,
+          # OPT_TODO, OPT_REVIEW, OPT_DONE.
+          # Tries user(login:) then organization(login:) so a future
+          # org-owned project keeps working.
+          # --------------------------------------------------------------
+          PROJECT_ID=""
+          STATUS_FIELD_ID=""
+          OPT_TODO=""
+          OPT_REVIEW=""
+          OPT_DONE=""
+
+          resolve_project_metadata() {
+            local q='query($login: String!, $number: Int!) {
+              user(login: $login) {
+                projectV2(number: $number) {
+                  id
+                  fields(first: 50) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField { id name options { id name } }
                     }
                   }
                 }
               }
-            }
-          }'
-
-          VARS=$(jq -n --arg login "$PROJECT_OWNER" --argjson number "$PROJECT_NUMBER" '{login: $login, number: $number}')
-          RESULT=$(graphql "$QUERY" "$VARS")
-
-          # Check for GraphQL errors
-          ERRORS=$(echo "$RESULT" | jq -r '.errors[0].message // empty')
-          if [ -n "$ERRORS" ]; then
-            echo "::warning::GraphQL error: $ERRORS"
-            echo "::warning::If using GITHUB_TOKEN, set a PROJECT_TOKEN secret with a PAT that has 'project' scope."
-            exit 0
-          fi
-
-          PROJECT_ID=$(echo "$RESULT" | jq -r '.data.user.projectV2.id // empty')
-          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
-            echo "::warning::Project #$PROJECT_NUMBER not found for user '$PROJECT_OWNER'."
-            echo "::warning::If using GITHUB_TOKEN, set a PROJECT_TOKEN secret with a PAT that has 'project' scope."
-            exit 0
-          fi
-
-          echo "Found project: $PROJECT_ID"
-
-          # Get status field ID
-          STATUS_FIELD_ID=$(echo "$RESULT" | jq -r --arg name "$STATUS_FIELD_NAME" \
-            '.data.user.projectV2.fields.nodes[] | select(.name == $name) | .id' | head -1)
-
-          if [ -z "$STATUS_FIELD_ID" ]; then
-            echo "::warning::Project has no \"$STATUS_FIELD_NAME\" field"
-            exit 0
-          fi
-
-          # Helper: get option ID by name
-          get_opt() {
-            echo "$RESULT" | jq -r --arg name "$1" \
-              '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == $name) | .id' | head -1
-          }
-
-          OPT_TODO=$(get_opt "$COL_TODO")
-          OPT_PROGRESS=$(get_opt "$COL_PROGRESS")
-          OPT_REVIEW=$(get_opt "$COL_REVIEW")
-          OPT_DONE=$(get_opt "$COL_DONE")
-
-          # ----------------------------------------------------------------
-          # 2) Helper functions
-          # ----------------------------------------------------------------
-          add_to_project() {
-            local content_id="$1"
-            local mutation='mutation($project: ID!, $content: ID!) {
-              addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
-                item { id }
-              }
             }'
-            local vars
-            vars=$(jq -n --arg project "$PROJECT_ID" --arg content "$content_id" '{project: $project, content: $content}')
-            local result
-            result=$(graphql "$mutation" "$vars")
-            echo "$result" | jq -r '.data.addProjectV2ItemById.item.id // empty'
-          }
-
-          find_existing_item() {
-            local content_id="$1"
-            local query='query($project: ID!) {
-              node(id: $project) {
-                ... on ProjectV2 {
-                  items(first: 100) {
-                    nodes { id content { ... on Issue { id } ... on PullRequest { id } } }
+            local q_org='query($login: String!, $number: Int!) {
+              organization(login: $login) {
+                projectV2(number: $number) {
+                  id
+                  fields(first: 50) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField { id name options { id name } }
+                    }
                   }
                 }
               }
             }'
-            local vars
-            vars=$(jq -n --arg project "$PROJECT_ID" '{project: $project}')
-            local result
-            result=$(graphql "$query" "$vars")
-            echo "$result" | jq -r --arg id "$content_id" \
-              '.data.node.items.nodes[] | select(.content.id == $id) | .id' | head -1
+            local result project_json
+            result=$(gql "$q" -F login="$PROJECT_OWNER" -F number="$PROJECT_NUMBER")
+            project_json=$(printf '%s' "$result" | jq -c '.data.user.projectV2 // null')
+            if [ "$project_json" = "null" ] || [ -z "$project_json" ]; then
+              log "No user project found, retrying as organization..."
+              result=$(gql "$q_org" -F login="$PROJECT_OWNER" -F number="$PROJECT_NUMBER")
+              project_json=$(printf '%s' "$result" | jq -c '.data.organization.projectV2 // null')
+            fi
+            PROJECT_ID=$(printf '%s' "$project_json" | jq -r '.id // empty')
+            [ -n "$PROJECT_ID" ] || die "Project #$PROJECT_NUMBER not found for owner '$PROJECT_OWNER'"
+            STATUS_FIELD_ID=$(printf '%s' "$project_json" | jq -r '.fields.nodes[] | select(.name == "Status") | .id' | head -1)
+            [ -n "$STATUS_FIELD_ID" ] || die "Project has no 'Status' single-select field"
+            OPT_TODO=$(printf '%s' "$project_json" | jq -r '.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Todo") | .id' | head -1)
+            # NOTE: option rows live under the Status field; filter both levels explicitly.
+            OPT_REVIEW=$(printf '%s' "$project_json" | jq -r '.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Review") | .id' | head -1)
+            OPT_DONE=$(printf '%s' "$project_json" | jq -r '.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id' | head -1)
+            [ -n "$OPT_TODO" ] || die "Status option 'Todo' missing"
+            [ -n "$OPT_REVIEW" ] || die "Status option 'In Review' missing"
+            [ -n "$OPT_DONE" ] || die "Status option 'Done' missing"
+            log "Project $PROJECT_ID (Status field $STATUS_FIELD_ID)"
+          }
+
+          # --------------------------------------------------------------
+          # criteria_status <issue-number>: stdout-only verdict: done|review.
+          # done = no checkboxes OR zero unchecked. Counts via awk (no grep -c pitfalls).
+          # --------------------------------------------------------------
+          criteria_status() {
+            local n="$1"
+            local body
+            body=$(gh api "repos/$GITHUB_REPOSITORY/issues/$n" --jq '.body // ""') \
+              || die "Failed to fetch issue #$n body"
+            local total unchecked
+            total=$(printf '%s\n' "$body" | awk '/^[[:space:]]*- \[[ xX]\]/{n++} END{print n+0}')
+            unchecked=$(printf '%s\n' "$body" | awk '/^[[:space:]]*- \[ \]/{n++} END{print n+0}')
+            log "Issue #$n: $total checkboxes, $unchecked unchecked"
+            if [ "$total" -eq 0 ] || [ "$unchecked" -eq 0 ]; then
+              printf 'done\n'
+            else
+              printf 'review\n'
+            fi
+          }
+
+          # --------------------------------------------------------------
+          # find_item_id <number> <Issue|PullRequest>: stdout = item ID or empty.
+          # Primary: gh project item-list (auto-paginating, fixes >100-card dup bug).
+          # Fallback (inline): paginated GraphQL items(first:100, after:$cursor)
+          # if gh JSON lacks number/repository/type fields.
+          # --------------------------------------------------------------
+          find_item_id() {
+            local n="$1"
+            local t="$2"
+            local items_json item
+            items_json=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 500 --format json 2>&1) \
+              || die "gh project item-list failed: $items_json"
+            if printf '%s' "$items_json" | jq -e '.items' >/dev/null 2>&1; then
+              item=$(printf '%s' "$items_json" | jq -r --argjson num "$n" --arg repo "$GITHUB_REPOSITORY" --arg typ "$t" \
+                '.items[] | select(.number == $num and .repository == $repo and .type == $typ) | .id' | head -1)
+              # If the shape probe fails (no number/repository/type keys), fall through to GraphQL.
+              if printf '%s' "$items_json" | jq -e '.items[0] | has("number") and has("repository") and has("type")' >/dev/null 2>&1; then
+                printf '%s' "$item"
+                return
+              fi
+              log "gh item-list shape missing number/repository/type — using GraphQL fallback"
+            fi
+            # GraphQL fallback: paginate items, match content number + typename.
+            local cursor=""
+            local page
+            while true; do
+              if [ -z "$cursor" ]; then
+                page=$(gql 'query($owner: String!, $num: Int!) {
+                  user(login: $owner) { projectV2(number: $num) {
+                    items(first: 100) { pageInfo { hasNextPage endCursor }
+                      nodes { id content { __typename ... on Issue { number repository { nameWithOwner } } ... on PullRequest { number repository { nameWithOwner } } } } } } } }' \
+                  -F owner="$PROJECT_OWNER" -F num="$PROJECT_NUMBER")
+              else
+                page=$(gql 'query($owner: String!, $num: Int!, $cur: String!) {
+                  user(login: $owner) { projectV2(number: $num) {
+                    items(first: 100, after: $cur) { pageInfo { hasNextPage endCursor }
+                      nodes { id content { __typename ... on Issue { number repository { nameWithOwner } } ... on PullRequest { number repository { nameWithOwner } } } } } } } }' \
+                  -F owner="$PROJECT_OWNER" -F num="$PROJECT_NUMBER" -F cur="$cursor")
+              fi
+              item=$(printf '%s' "$page" | jq -r --argjson num "$n" --arg repo "$GITHUB_REPOSITORY" --arg typ "$t" \
+                '.data.user.projectV2.items.nodes[] | select(.content.number == $num and .content.repository.nameWithOwner == $repo and .content.__typename == $typ) | .id' | head -1)
+              if [ -n "$item" ]; then printf '%s' "$item"; return; fi
+              if [ "$(printf '%s' "$page" | jq -r '.data.user.projectV2.items.pageInfo.hasNextPage')" != "true" ]; then
+                printf ''
+                return
+              fi
+              cursor=$(printf '%s' "$page" | jq -r '.data.user.projectV2.items.pageInfo.endCursor')
+            done
+          }
+
+          add_item() {
+            local url="$1"
+            local id
+            id=$(gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$url" --format json --jq '.id' 2>&1) \
+              || die "gh project item-add failed for $url: $id"
+            [ -n "$id" ] || die "gh project item-add returned empty id for $url"
+            printf '%s' "$id"
+          }
+
+          ensure_item() {
+            local num="$1"
+            local typ="$2"
+            local id
+            id=$(find_item_id "$num" "$typ")
+            if [ -z "$id" ]; then
+              # This URL form resolves for both issues and PRs.
+              id=$(add_item "https://github.com/$GITHUB_REPOSITORY/issues/$num")
+            fi
+            printf '%s' "$id"
           }
 
           set_status() {
-            local item_id="$1"
-            local option_id="$2"
-            [ -z "$item_id" ] && return
-            [ -z "$option_id" ] && return
-            local mutation='mutation($project: ID!, $item: ID!, $field: ID!, $option: ID!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $project, itemId: $item,
-                fieldId: $field, value: { singleSelectOptionId: $option }
-              }) { projectV2Item { id } }
-            }'
-            local vars
-            vars=$(jq -n --arg project "$PROJECT_ID" --arg item "$item_id" --arg field "$STATUS_FIELD_ID" --arg option "$option_id" \
-              '{project: $project, item: $item, field: $field, option: $option}')
+            local item="$1"
+            local option="$2"
+            local out
+            out=$(gh project item-edit --id "$item" --project-id "$PROJECT_ID" --field-id "$STATUS_FIELD_ID" --single-select-option-id "$option" 2>&1) \
+              || die "gh project item-edit failed for item $item: $out"
+          }
+
+          move_card() {
+            local num="$1"
+            local typ="$2"
+            local option="$3"
+            local label="$4"
+            local item
+            item=$(ensure_item "$num" "$typ")
+            set_status "$item" "$option"
+            log "#$num ($typ) -> $label"
+          }
+
+          # --------------------------------------------------------------
+          # closing_issue_numbers <pr-number>: GitHub's own link resolver
+          # (closingIssuesReferences) instead of body-regex parsing.
+          # --------------------------------------------------------------
+          closing_issue_numbers() {
+            local pr="$1"
+            local owner repo
+            owner=$(printf '%s' "$GITHUB_REPOSITORY" | cut -d/ -f1)
+            repo=$(printf '%s' "$GITHUB_REPOSITORY" | cut -d/ -f2-)
             local result
-            result=$(graphql "$mutation" "$vars")
-            if echo "$result" | jq -e '.errors' >/dev/null 2>&1; then
-              echo "::warning::Could not set status: $(echo "$result" | jq -r '.errors[0].message // empty')"
-            fi
+            result=$(gql 'query($owner: String!, $repo: String!, $pr: Int!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $pr) { closingIssuesReferences(first: 20) { nodes { number } } }
+              }
+            }' -F owner="$owner" -F repo="$repo" -F pr="$pr")
+            printf '%s' "$result" | jq -r '.data.repository.pullRequest.closingIssuesReferences.nodes[].number' 2>/dev/null | sort -un
           }
 
-          # ----------------------------------------------------------------
-          # 2b) Acceptance criteria checker
-          # ----------------------------------------------------------------
-          # Fetches the issue body and counts checked vs unchecked checkboxes.
-          # Returns "done" if all checkboxes are checked, "review" if partial,
-          # "done" if there are no checkboxes at all.
-          check_acceptance_criteria() {
-            local issue_number="$1"
-            local issue_body
-            issue_body=$(curl -s --retry 3 \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$issue_number" \
-              | jq -r '.body // empty')
+          # --------------------------------------------------------------
+          # Main dispatch
+          # --------------------------------------------------------------
+          resolve_project_metadata
 
-            if [ -z "$issue_body" ]; then
-              echo "done"
-              return
-            fi
+          EVENT_NAME="${GITHUB_EVENT_NAME:-}"
+          ACTION=$(jq -r '.action // empty' "$GITHUB_EVENT_PATH")
+          ISSUE_NUM=$(jq -r '.issue.number // empty' "$GITHUB_EVENT_PATH")
+          PR_NUM=$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH")
+          MERGED=$(jq -r '.pull_request.merged // false' "$GITHUB_EVENT_PATH")
 
-            local total checked unchecked
-            total=$(echo "$issue_body" | grep -cE '^\s*- \[[ xX]\]' || echo 0)
-            checked=$(echo "$issue_body" | grep -cE '^\s*- \[[xX]\]' || echo 0)
-            unchecked=$(echo "$issue_body" | grep -cE '^\s*- \[ \]' || echo 0)
-
-            echo "Issue #$issue_number: $checked checked, $unchecked unchecked, $total total checkboxes"
-
-            if [ "$total" -eq 0 ]; then
-              echo "done"
-              return
-            fi
-
-            if [ "$unchecked" -eq 0 ]; then
-              echo "done"
-            else
-              echo "review"
-            fi
-          }
-
-          # ----------------------------------------------------------------
-          # 3) Determine target column from event
-          # ----------------------------------------------------------------
-          EVENT_NAME="$GITHUB_EVENT_NAME"
-          EVENT_PATH="$GITHUB_EVENT_PATH"
-
-          if [ "$EVENT_NAME" = "push" ]; then
-            # Walk commit messages for "Closes #N" / "Fixes #N"
-            MESSAGES=$(jq -r '.commits[].message // empty' "$EVENT_PATH")
-            for num in $(echo "$MESSAGES" | grep -oiE '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#[0-9]+' | grep -oE '[0-9]+' | sort -u); do
-              echo "Processing issue #$num from commit message"
-              ISSUE_JSON=$(curl -s --retry 3 \
-                -H "Authorization: Bearer $GH_TOKEN" \
-                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num")
-              ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty')
-              ISSUE_NODE_ID=$(echo "$ISSUE_JSON" | jq -r '.node_id // empty')
-
-              if [ -z "$ISSUE_NODE_ID" ]; then
-                echo "::warning::Could not fetch issue #$num"
-                continue
-              fi
-
-              if [ "$ISSUE_STATE" = "open" ]; then
-                curl -s --retry 3 -X PATCH \
-                  -H "Authorization: Bearer $GH_TOKEN" \
-                  -H "Content-Type: application/json" \
-                  -d '{"state": "closed"}' \
-                  "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num" >/dev/null
-              fi
-
-              # Check acceptance criteria before moving to Done
-              CRITERIA_RESULT=$(check_acceptance_criteria "$num")
-              if [ "$CRITERIA_RESULT" = "done" ]; then
-                TARGET="$OPT_DONE"
-              else
-                TARGET="$OPT_REVIEW"
-              fi
-
-              ITEM_ID=$(find_existing_item "$ISSUE_NODE_ID")
-              [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$ISSUE_NODE_ID")
-              set_status "$ITEM_ID" "$TARGET"
-            done
+          if [ "$EVENT_NAME" = "issues" ]; then
+            [ -n "$ISSUE_NUM" ] || die "issues event missing issue.number"
+            case "$ACTION" in
+              opened|reopened)
+                move_card "$ISSUE_NUM" "Issue" "$OPT_TODO" "Todo"
+                ;;
+              closed)
+                verdict=$(criteria_status "$ISSUE_NUM")
+                if [ "$verdict" = "done" ]; then
+                  move_card "$ISSUE_NUM" "Issue" "$OPT_DONE" "Done"
+                else
+                  move_card "$ISSUE_NUM" "Issue" "$OPT_REVIEW" "In Review"
+                fi
+                ;;
+              *)
+                log "Ignoring issues action '$ACTION'"
+                exit 0
+                ;;
+            esac
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            [ -n "$PR_NUM" ] || die "pull_request event missing pull_request.number"
+            case "$ACTION" in
+              opened|reopened|synchronize)
+                move_card "$PR_NUM" "PullRequest" "$OPT_REVIEW" "In Review"
+                for linked in $(closing_issue_numbers "$PR_NUM"); do
+                  move_card "$linked" "Issue" "$OPT_REVIEW" "In Review"
+                done
+                ;;
+              closed)
+                if [ "$MERGED" = "true" ]; then
+                  move_card "$PR_NUM" "PullRequest" "$OPT_DONE" "Done"
+                else
+                  move_card "$PR_NUM" "PullRequest" "$OPT_REVIEW" "In Review"
+                  for linked in $(closing_issue_numbers "$PR_NUM"); do
+                    move_card "$linked" "Issue" "$OPT_TODO" "Todo"
+                  done
+                fi
+                ;;
+              *)
+                log "Ignoring pull_request action '$ACTION'"
+                exit 0
+                ;;
+            esac
+          else
+            log "Ignoring event '$EVENT_NAME'"
             exit 0
           fi
 
-          # For issues and PRs
-          CONTENT_ID=""
-          TARGET=""
-
-          if [ "$EVENT_NAME" = "issues" ]; then
-            CONTENT_ID=$(jq -r '.issue.node_id // empty' "$EVENT_PATH")
-            ACTION=$(jq -r '.action // empty' "$EVENT_PATH")
-            ISSUE_NUMBER=$(jq -r '.issue.number // empty' "$EVENT_PATH")
-            if [ "$ACTION" = "closed" ]; then
-              # Check acceptance criteria before moving to Done
-              CRITERIA_RESULT=$(check_acceptance_criteria "$ISSUE_NUMBER")
-              if [ "$CRITERIA_RESULT" = "done" ]; then
-                TARGET="$OPT_DONE"
-              else
-                TARGET="$OPT_REVIEW"
-              fi
-            else
-              TARGET="$OPT_TODO"
-            fi
-          elif [ "$EVENT_NAME" = "pull_request" ]; then
-            CONTENT_ID=$(jq -r '.pull_request.node_id // empty' "$EVENT_PATH")
-            ACTION=$(jq -r '.action // empty' "$EVENT_PATH")
-            MERGED=$(jq -r '.pull_request.merged // false' "$EVENT_PATH")
-            if [ "$MERGED" = "true" ] || [ "$ACTION" = "closed" ]; then
-              # PR merged/closed — check linked issues for acceptance criteria
-              # Extract issue numbers from PR body (Closes #N, Fixes #N, etc.)
-              PR_BODY=$(jq -r '.pull_request.body // empty' "$EVENT_PATH")
-              ISSUE_NUMS=$(echo "$PR_BODY" | grep -oiE '(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#[0-9]+' | grep -oE '[0-9]+' | sort -u)
-
-              if [ -n "$ISSUE_NUMS" ]; then
-                for num in $ISSUE_NUMS; do
-                  echo "Checking acceptance criteria for linked issue #$num"
-                  CRITERIA_RESULT=$(check_acceptance_criteria "$num")
-                  if [ "$CRITERIA_RESULT" = "done" ]; then
-                    TARGET="$OPT_DONE"
-                  else
-                    TARGET="$OPT_REVIEW"
-                  fi
-
-                  # Move the linked issue
-                  ISSUE_JSON=$(curl -s --retry 3 \
-                    -H "Authorization: Bearer $GH_TOKEN" \
-                    "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$num")
-                  ISSUE_NODE_ID=$(echo "$ISSUE_JSON" | jq -r '.node_id // empty')
-                  if [ -n "$ISSUE_NODE_ID" ]; then
-                    ITEM_ID=$(find_existing_item "$ISSUE_NODE_ID")
-                    [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$ISSUE_NODE_ID")
-                    set_status "$ITEM_ID" "$TARGET"
-                  fi
-                done
-              fi
-              # Also move the PR itself to Done or In Review
-              TARGET="$OPT_DONE"
-            else
-              # PR opened/synchronized/reopened -> In Review
-              TARGET="$OPT_REVIEW"
-            fi
-          fi
-
-          [ -z "$CONTENT_ID" ] && exit 0
-          [ -z "$TARGET" ] && exit 0
-
-          # ----------------------------------------------------------------
-          # 4) Apply: ensure card exists, then set Status
-          # ----------------------------------------------------------------
-          ITEM_ID=$(find_existing_item "$CONTENT_ID")
-          [ -z "$ITEM_ID" ] && ITEM_ID=$(add_to_project "$CONTENT_ID")
-          set_status "$ITEM_ID" "$TARGET"
-
-          echo "Synced item to project board"
+          log "Project sync complete"

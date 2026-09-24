@@ -173,7 +173,7 @@ Important content from the previous README, TODO, and implementation plan has be
 - [Trade-offs and alternatives](./docs/trade-offs-and-alternatives.md) — decision log and alternatives considered.
 - [Risks and edge cases](./docs/risks-and-edge-cases.md) — realistic operational and product risks.
 - [Operations](./docs/operations.md) — setup, service management, tests, migrations, cleanup.
-- [Roadmap](./docs/roadmap.md) — distilled project stages from `TODO.md` and implementation plan.
+- [Roadmap](./docs/roadmap.md) — production-SaaS roadmap: findings from all docs, staged delivery through Stage 7 (US-033 → US-044, Production Core) and Stage 8 (US-045 → US-056, SaaS Product & Billing).
 
 `TODO.md` remains the detailed issue-tracking source of truth for user stories and historical progress.
 
