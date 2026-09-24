@@ -12,7 +12,7 @@ fileignoreconfig:
 - filename: .github/workflows/pr-agent.yml
   checksum: 029fbcf2e43a8b51d187cc9f29a8eeb3de4504a14d5b9c1120072cf950f00d33
 - filename: frontend/package-lock.json
-  checksum: 083b7737e25089ea488bcb9f5990db4010ac71bb3ac15694e940a15f61007d9b
+  checksum: 0d1b03ae813613b00942e708f9791c405f59b7ced4f8e8d3345f9f2f63154026
 - filename: docs/TODO.md
   checksum: f41c0c73d149d3087feca393fbf98e565c879845074c5d73d5dbeec3e6be48a7
 - filename: backend/app/api/v1/jobs_stream.py
