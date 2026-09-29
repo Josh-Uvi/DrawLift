@@ -61,4 +61,6 @@ fileignoreconfig:
   checksum: 731b623acd568c5611efbe5b735b2a6bb81364e21e28c3a2a968be3aa7d83a0a
 - filename: scripts/stories.json
   checksum: cd10bb7c16909e6fb9d2c24f0cdb04986b566542d0c2af92277d116d52422536
+- filename: CONTRIBUTING.md
+  checksum: f7c714d2b713900a0e7adf0bcdd2f56c44e1c4cc6d78ef6df833a7fa50af300c
 version: "1.0"
