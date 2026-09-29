@@ -1,7 +1,6 @@
 """Tests for the User model and Alembic migrations."""
 
 import asyncio
-import os
 from collections.abc import AsyncGenerator
 from datetime import UTC
 
@@ -13,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from alembic import command
 from alembic.config import Config
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.core.database import Base
 from app.models.user import User
 
@@ -123,7 +122,7 @@ async def test_user_model_crud_and_uniqueness(db_session: AsyncSession, engine, 
 
     # Test case-insensitive uniqueness
     email2 = "Test@example.com"  # Same email, different case
-    user2 = User(email=email2.lower(), password_hash="another_hash")
+    user2 = User(email=email2, password_hash="another_hash")
     db_session.add(user2)
 
     with pytest.raises(IntegrityError):

@@ -29,7 +29,7 @@ def upgrade() -> None:
             primary_key=True,
             server_default=sa.text("gen_random_uuid()"),
         ),
-        sa.Column("email", sa.String, nullable=False, unique=True),
+        sa.Column("email", sa.String, nullable=False),
         sa.Column("password_hash", sa.Text, nullable=False),
         sa.Column(
             "created_at",
@@ -38,9 +38,9 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("idx_users_email", "users", ["email"], unique=True)
+    op.create_index("idx_users_email_lower", "users", [sa.text("lower(email)")], unique=True)
 
 
 def downgrade() -> None:
-    op.drop_index("idx_users_email", table_name="users")
+    op.drop_index("idx_users_email_lower", table_name="users")
     op.drop_table("users")

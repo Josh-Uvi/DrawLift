@@ -23,7 +23,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(
         String,
         nullable=False,
-        unique=True,
+
     )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
