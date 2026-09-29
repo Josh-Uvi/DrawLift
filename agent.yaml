@@ -1,0 +1,56 @@
+agent:
+  name: ai-coding-agent
+
+repository:
+  defaultBranch: main
+
+triage:
+  requiredLabels:
+    - agent-ready
+  ignoredLabels:
+    - security
+    - legal
+    - breaking-change
+
+models:
+  primary: gpt-5.6-luna
+  fallback: gpt-6-luna
+
+approval:
+  provider: github # Options: 'github' | 'telegram' | 'both'
+  beforeCoding: true
+  beforeMerge: true
+
+commands:
+  # Customize commands to match your stack (Node, Python, Go, Rust)
+  install: make install
+  lint: make lint
+  typecheck: make typecheck
+  test: make test
+  build: make build
+
+repair:
+  enabled: true
+  maxAttempts: 2
+
+limits:
+  maxChangedFiles: 20
+  maxDiffLines: 1500
+  executionTimeoutMinutes: 30
+
+permissions:
+  allowedPaths:
+    - '**/*'
+  protectedPaths:
+    - '.github/**'
+    - 'infrastructure/**'
+    - 'secrets/**'
+    - 'migrations/**'
+    - '**/.env*'
+    - '*.env'
+  blockedCommands:
+    - 'rm -rf /'
+    - 'rm -rf *'
+    - 'terraform destroy'
+    - 'git push --force'
+    - 'mkfs'
