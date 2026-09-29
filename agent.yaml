@@ -13,8 +13,8 @@ triage:
     - breaking-change
 
 models:
-  primary: gpt-5.6-luna
-  fallback: gpt-6-luna
+  primary: openai/gpt-5.6-luna
+  fallback: openai/gpt-6-luna
 
 approval:
   provider: github # Options: 'github' | 'telegram' | 'both'
