@@ -36,7 +36,7 @@ fileignoreconfig:
 - filename: backend/tests/test_placeholder_task_paths.py
   checksum: 9d4d13e1fb42553059aa323251d2b7e31f89c2c653a8fabaf3de5f6e6a9dfe94
 - filename: README.md
-  checksum: 2fa2e0000b9787c9dbfec4e85ad00ffb1a7dfa58770bb6718db43968deed29c1
+  checksum: e9c18071fc8c19d034ad802659f2a977b1bad2c79afd76c9fe37f02110a83ded
 - filename: backend/tests/test_stale_job_recovery.py
   checksum: f3509c5c0e6b1b93691a00c5643a07deb30cc91565266c408a487f52491e4774
 - filename: backend/tests/test_celery_worker_config.py
