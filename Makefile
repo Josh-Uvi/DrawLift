@@ -33,7 +33,9 @@ help: ## Show available Make targets
 	@printf "  \033[36m%-28s\033[0m %s\n" "docker-stop-postgres" "Stop PostgreSQL Docker service" "docker-stop-redis" "Stop Redis Docker service" "docker-stop-backend" "Stop FastAPI Docker service" "docker-stop-worker" "Stop Celery worker Docker service" "docker-stop-beat" "Stop Celery Beat Docker service" "docker-stop-frontend" "Stop Next.js Docker service"
 	@printf "\nHybrid local development:\n"
 	@printf "  \033[36m%-28s\033[0m %s\n" "local-up" "Host frontend/backend + Docker postgres/redis/worker" "local-down" "Stop host frontend/backend + Docker local services" "local-up-beat" "Optionally start cleanup scheduler in Docker"
-	@printf "\nCommon variables:\n  COMPOSE=%s\n  BACKEND_VENV=%s\n  LOCAL_STORAGE_DIR=%s\n  LOCAL_MODELS_DIR=%s\n\n" "$(COMPOSE)" "$(BACKEND_VENV)" "$(LOCAL_STORAGE_DIR)" "$(LOCAL_MODELS_DIR)"
+	@printf "\nQuality checks (each also available as <target>-backend / <target>-frontend):\n"
+	@printf "  \033[36m%-28s\033[0m %s\n" "install" "Install backend Python + frontend npm dependencies" "lint" "Lint backend (ruff) and frontend (eslint + prettier)" "typecheck" "Type-check backend (mypy) and frontend (tsc)" "test" "Run backend (pytest) and frontend (vitest) tests" "build" "Build backend bytecode and frontend (next build)" "check" "Run lint + typecheck + test" "ci" "Full pipeline: install + check + build"
+	@printf "\nCommon variables:\n  COMPOSE=%s\n  BACKEND_VENV=%s\n  NPM=%s\n  LOCAL_STORAGE_DIR=%s\n  LOCAL_MODELS_DIR=%s\n\n" "$(COMPOSE)" "$(BACKEND_VENV)" "$(NPM)" "$(LOCAL_STORAGE_DIR)" "$(LOCAL_MODELS_DIR)"
 
 define start_host_service
 	@mkdir -p "$(PID_DIR)" "$(LOG_DIR)"
@@ -123,6 +125,78 @@ check-frontend-deps:
 .PHONY: prepare-local-docker
 prepare-local-docker:
 	mkdir -p "$(LOCAL_STORAGE_DIR)" "$(LOCAL_MODELS_DIR)"
+
+# ---------------------------------------------------------------------------
+# Quality checks: install, lint, typecheck, test, build
+# ---------------------------------------------------------------------------
+# Every command is available for each project as <target>-backend /
+# <target>-frontend. The unsuffixed targets fan out over both projects so
+# `make lint`, `make test`, and friends check the whole monorepo.
+NPM ?= npm
+FRONTEND_BIN := $(CURDIR)/frontend/node_modules/.bin
+
+.PHONY: install install-backend install-frontend
+install: install-backend install-frontend ## Install backend and frontend dependencies
+
+install-backend: ## Create the backend virtualenv (if missing) and install Python dependencies
+	@if [ ! -d "$(BACKEND_VENV)" ]; then \
+		echo "Creating backend virtualenv at $(BACKEND_VENV)..."; \
+		python3 -m venv "$(BACKEND_VENV)"; \
+	fi
+	cd backend && "$(BACKEND_BIN)/python" -m pip install --upgrade pip
+	cd backend && "$(BACKEND_BIN)/python" -m pip install -r requirements.txt
+
+install-frontend: ## Install frontend npm dependencies
+	cd frontend && $(NPM) install
+
+.PHONY: lint lint-backend lint-frontend
+lint: lint-backend lint-frontend ## Lint backend (ruff) and frontend (eslint + prettier)
+
+lint-backend: check-backend-venv ## Lint the backend with ruff (check + format check)
+	cd backend && "$(BACKEND_BIN)/ruff" check .
+	cd backend && "$(BACKEND_BIN)/ruff" format --check .
+
+lint-frontend: check-frontend-deps ## Lint the frontend with ESLint, then verify Prettier formatting
+	cd frontend && $(NPM) run lint
+	cd frontend && $(NPM) run format:check
+
+.PHONY: typecheck typecheck-backend typecheck-frontend
+typecheck: typecheck-backend typecheck-frontend ## Type-check backend (mypy) and frontend (tsc)
+
+typecheck-backend: check-backend-venv ## Type-check the backend with mypy
+	cd backend && "$(BACKEND_BIN)/mypy" app/
+
+typecheck-frontend: check-frontend-deps ## Type-check the frontend with the TypeScript compiler
+	cd frontend && "$(FRONTEND_BIN)/tsc" --noEmit
+
+.PHONY: test test-backend test-frontend
+test: test-backend test-frontend ## Run backend (pytest) and frontend (vitest) tests
+
+test-backend: check-backend-venv ## Run the backend pytest suite
+	cd backend && "$(BACKEND_BIN)/pytest"
+
+test-frontend: check-frontend-deps ## Run frontend tests (skips when no test runner is configured)
+	@if grep -q '"test"[[:space:]]*:' frontend/package.json; then \
+		cd frontend && $(NPM) test; \
+	elif [ -x "$(FRONTEND_BIN)/vitest" ]; then \
+		cd frontend && "$(FRONTEND_BIN)/vitest" run; \
+	else \
+		echo "No frontend test runner configured (add a \"test\" script or vitest); skipping."; \
+	fi
+
+.PHONY: build build-backend build-frontend
+build: build-backend build-frontend ## Build backend bytecode and the frontend (next build)
+
+build-backend: check-backend-venv ## Byte-compile the backend package (use docker-build for the image)
+	cd backend && "$(BACKEND_BIN)/python" -m compileall -q app
+
+build-frontend: check-frontend-deps ## Build the frontend for production with Next.js
+	cd frontend && $(NPM) run build
+
+.PHONY: check ci
+check: lint typecheck test ## Run every quality gate (lint + typecheck + test)
+
+ci: install check build ## Full CI pipeline: install, lint, typecheck, test, build
 
 .PHONY: docker-up docker-up-dev docker-up-prod docker-down docker-restart docker-build docker-ps docker-logs docker-migrate docker-up-dwg
 docker-up: check-compose ## Start all Docker services (frontend, backend, worker, beat, postgres, redis)

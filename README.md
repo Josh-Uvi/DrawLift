@@ -227,6 +227,39 @@ make download-model
 make validate-model
 ```
 
+Root quality commands (per-project variants: `make install-backend`, `make lint-frontend`, ...):
+
+```bash
+make install      # backend venv + deps, frontend npm dependencies
+make lint         # backend ruff (check + format check), frontend eslint + prettier
+make typecheck    # backend mypy, frontend tsc --noEmit
+make test         # backend pytest, frontend vitest (when configured)
+make build        # backend byte-compile, frontend next build
+make check        # lint + typecheck + test
+make ci           # install + check + build
+```
+
+### Running frontend and backend checks concurrently
+
+Within a single phase the backend and frontend targets are independent, so they
+can run in parallel with `-j2`:
+
+```bash
+make -j2 lint
+make -j2 typecheck
+make -j2 test
+make -j2 build
+make -j2 check
+```
+
+Keep the phases themselves sequential: `install` rewrites `backend/.venv` and
+`frontend/node_modules`, so never run it concurrently with `lint`, `typecheck`,
+`test`, or `build`. Run `make ci` without `-j`, or spell the phases out:
+
+```bash
+make install && make -j2 check && make -j2 build
+```
+
 ## Contributing
 
 Issues, branches, and PRs are managed in GitHub. Use the user-story and issue conventions documented in [TODO.md](./docs/TODO.md) and the delivery summary in [docs/roadmap.md](./docs/roadmap.md).

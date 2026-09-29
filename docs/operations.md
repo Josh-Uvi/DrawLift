@@ -145,6 +145,36 @@ alembic upgrade head
 
 ## Tests and checks
 
+The `make` targets below run the same checks for each project. Every target also
+has a per-project variant (`make lint-backend`, `make lint-frontend`, and so on),
+and `make check` runs lint + typecheck + test while `make ci` adds install and build.
+
+```bash
+make install     # backend venv + deps, frontend npm dependencies
+make lint        # backend ruff, frontend eslint + prettier
+make typecheck   # backend mypy, frontend tsc --noEmit
+make test        # backend pytest, frontend vitest (skipped when not configured)
+make build       # backend byte-compile, frontend next build
+```
+
+The backend and frontend variants of a single phase are independent, so they can
+run concurrently with `-j2` (`make -j2 lint`, `make -j2 typecheck`,
+`make -j2 test`, `make -j2 build`, `make -j2 check`). Keep the phases themselves
+sequential, because `install` rewrites `backend/.venv` and `frontend/node_modules`:
+
+```bash
+make install && make -j2 check && make -j2 build
+```
+
+Do not run `make ci` with `-j`, since that could overlap `install` with `check`
+and `build`.
+
+GNU Make 3.81 (the macOS default) has no `--output-sync`, so parallel recipes may
+interleave lines from different projects in the terminal. Both commands still run
+and the exit status remains accurate.
+
+Equivalent manual commands:
+
 Backend:
 
 ```bash
@@ -161,6 +191,7 @@ Frontend:
 cd frontend
 npm run lint
 npm run format:check
+npx tsc --noEmit
 npm run build
 ```
 
