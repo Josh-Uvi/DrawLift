@@ -49,9 +49,7 @@ async def setup_database(connection):
 
 
 @pytest.fixture(scope="function")
-async def db_session(
-    engine, connection, setup_database
-) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(engine, connection, setup_database) -> AsyncGenerator[AsyncSession, None]:
     """Provide an async session for database interactions within tests."""
     transaction = await connection.begin()
     async_session_maker = sessionmaker(
@@ -118,7 +116,7 @@ async def test_user_model_crud_and_uniqueness(db_session: AsyncSession, engine, 
     assert user1.email == email1.lower()
     assert user1.created_at is not None
     assert user1.created_at.tzinfo is not None
-    assert user1.created_at.tzinfo == UTC # Assuming UTC for func.now()
+    assert user1.created_at.tzinfo == UTC  # Assuming UTC for func.now()
 
     # Test case-insensitive uniqueness
     email2 = "Test@example.com"  # Same email, different case
