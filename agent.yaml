@@ -13,8 +13,9 @@ triage:
     - breaking-change
 
 models:
-  primary: openai/gpt-5.6-luna
-  fallback: openai/gpt-6-luna
+  provider: google
+  primary: google/gemini-2.5-flash
+  fallback: google/gemini-1.5-flash
 
 approval:
   provider: github # Options: 'github' | 'telegram' | 'both'
