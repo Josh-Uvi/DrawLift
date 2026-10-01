@@ -15,7 +15,7 @@ triage:
 models:
   provider: google
   primary: google/gemini-2.5-flash
-  fallback: google/gemini-2.5-flash-lite-preview-06-17
+  fallback: google/gemini-1.5-flash
 
 approval:
   provider: github # Options: 'github' | 'telegram' | 'both'
