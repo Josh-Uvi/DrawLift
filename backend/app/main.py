@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
+from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.jobs_pages import router as jobs_pages_router
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     # Routers
     api_prefix = settings.API_V1_PREFIX
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    app.include_router(auth_router, prefix=api_prefix, tags=["auth"])
     app.include_router(jobs_router, prefix=api_prefix, tags=["jobs"])
     app.include_router(jobs_pages_router, prefix=api_prefix, tags=["jobs"])
     app.include_router(jobs_stream_router, prefix=api_prefix, tags=["jobs"])
