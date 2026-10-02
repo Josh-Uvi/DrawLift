@@ -63,4 +63,20 @@ fileignoreconfig:
   checksum: cd10bb7c16909e6fb9d2c24f0cdb04986b566542d0c2af92277d116d52422536
 - filename: CONTRIBUTING.md
   checksum: f7c714d2b713900a0e7adf0bcdd2f56c44e1c4cc6d78ef6df833a7fa50af300c
+- filename: backend/tests/test_users_model.py
+  checksum: fdbec69ff8085658dd8b59db64fbf22b69ad08ddd21c28df0a951b4f6907f19a
+- filename: backend/tests/test_auth_register_login.py
+  checksum: e71bd31a2f5745fe14c28553fdc79440468456fc5fe3b928d14ec6fb30769e8e
+- filename: backend/alembic/versions/0003_create_users_table.py
+  checksum: a2dd99fabdd63a00e14079ab68c9bdca1bf206e5c7e59338d0f58853adb92e2e
+- filename: backend/app/auth/__init__.py
+  checksum: 56f28c26bb8fba9ac85884e8dede25fa2fe208a482bdd0acadd979b504248a74
+- filename: backend/app/api/v1/auth.py
+  checksum: a7e8cc8f169fdb25f2cee2f4a3aabbbcfc248c41c6c9549a3836e00e0f1d3b9c
+- filename: backend/app/auth/schemas.py
+  checksum: 5e65e8ea19dec330f18d8797fd03cde9f4c32247136e459fc76542f88dd145b6
+- filename: backend/app/auth/hashing.py
+  checksum: 4019fc91e52df92d2cf9898a7aa4570276ef9d20556164912d297ed847b4d4b3
+- filename: backend/app/models/user.py
+  checksum: d7d73d48795e69a861ea914c29d6996c2bd4e9bd1ff862d4931fdd22bbdb9941
 version: "1.0"
