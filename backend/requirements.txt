@@ -1,2 +1,5 @@
 
 aiosqlite==0.20.*
+fastapi==0.111.*
+uvicorn==0.29.*
+asyncpg==0.29.*

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useDropzone } from "react-dropzone";
+import { FileRejection, useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 
 interface DropZoneProps {
@@ -11,7 +11,7 @@ interface DropZoneProps {
 
 export default function DropZone({ onFileSelect, disabled = false }: DropZoneProps) {
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (rejectedFiles.length > 0) {
         toast.error("Only PDF files are accepted");
         return;

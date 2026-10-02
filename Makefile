@@ -167,13 +167,13 @@ typecheck-backend: check-backend-venv ## Type-check the backend with mypy
 	cd backend && "$(BACKEND_BIN)/mypy" app/
 
 typecheck-frontend: check-frontend-deps ## Type-check the frontend with the TypeScript compiler
-	cd frontend && "$(FRONTEND_BIN)/tsc" --noEmit
+	cd frontend && npx tsc --noEmit
 
 .PHONY: test test-backend test-frontend
 test: test-backend test-frontend ## Run backend (pytest) and frontend (vitest) tests
 
 test-backend: check-backend-venv ## Run the backend pytest suite
-	cd backend && "$(BACKEND_BIN)/pytest"
+	cd backend && DATABASE_URL=sqlite+aiosqlite:///:memory: "$(BACKEND_BIN)/pytest"
 
 test-frontend: check-frontend-deps ## Run frontend tests (skips when no test runner is configured)
 	@if grep -q '"test"[[:space:]]*:' frontend/package.json; then \
