@@ -1,21 +1,30 @@
 """Alembic environment script for async SQLAlchemy."""
 
 import asyncio
+import os
+import sys
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from app.core.config import get_settings
-from app.core.database import Base
-from app.models.job import Job  # noqa: F401 — ensure model is registered
+
+# Add the project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+
+
+from backend.app.core.config import get_settings
+from backend.app.core.database import Base
+from backend.app.core.database import Base
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
+print(f"DATABASE_URL from settings: {settings.DATABASE_URL}")
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata

@@ -1,79 +1,67 @@
-"""Auth API endpoints: POST /auth/register, POST /auth/login."""
+"""API v1 authentication routes."""
 
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.hashing import hash_password, verify_password
-from app.auth.schemas import LoginRequest, RegisterRequest, UserPublic
-from app.core.database import get_db
-from app.models.user import User
+from backend.app.auth.hashing import hash_password, verify_password
+from backend.app.auth.schemas import LoginRequest, RegisterRequest, UserPublic
+from backend.app.db.dao.user import UserDAO
 
-router = APIRouter()
-
-_INVALID_CREDENTIALS_DETAIL = "Invalid email or password"
-
-
-def _normalize_email(email: str) -> str:
-    """Lowercase and strip the email for case-insensitive uniqueness."""
-    return email.strip().lower()
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post(
-    "/auth/register",
+    "/register",
     response_model=UserPublic,
     status_code=status.HTTP_201_CREATED,
+    name="auth:register",
 )
 async def register(
-    payload: RegisterRequest,
-    db: AsyncSession = Depends(get_db),
+    user_data: RegisterRequest,
+    user_dao: UserDAO,
 ) -> UserPublic:
-    """Register a new user with email + Argon2id-hashed password.
-
-    Returns 201 with the public user (never the password/hash).
-    Returns 409 when the email is already registered. The duplicate is
-    detected by catching IntegrityError (not a pre-check SELECT) so
-    concurrent registrations cannot race.
-    """
-    user = User(
-        id=uuid.uuid4(),
-        email=_normalize_email(str(payload.email)),
-        password_hash=hash_password(payload.password),
-    )
-    db.add(user)
+    """Register a new user with email and password."""
     try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
+        user = await user_dao.create_user(
+            email=user_data.email,
+            password_hash=hash_password(user_data.password),
+        )
+        return user
+    except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        ) from exc
-    await db.refresh(user)
-    return UserPublic(id=user.id, email=user.email, created_at=user.created_at)
+            detail="User with this email already exists",
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
+        )
 
 
-@router.post("/auth/login", response_model=UserPublic)
+@router.post(
+    "/login",
+    response_model=UserPublic,
+    status_code=status.HTTP_200_OK,
+    name="auth:login",
+)
 async def login(
-    payload: LoginRequest,
-    db: AsyncSession = Depends(get_db),
+    user_data: LoginRequest,
+    user_dao: UserDAO,
 ) -> UserPublic:
-    """Authenticate with email + password.
-
-    Returns 200 with the public user for valid credentials. Returns 401
-    with an identical message for both unknown email and wrong password,
-    so callers cannot enumerate registered emails.
-    """
-    result = await db.execute(
-        select(User).where(User.email == _normalize_email(str(payload.email)))
-    )
-    user = result.scalars().first()
-    if user is None or not verify_password(user.password_hash, payload.password):
+    """Authenticate a user with email and password."""
+    user = await user_dao.get_user_by_email(email=user_data.email)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_INVALID_CREDENTIALS_DETAIL,
+            detail="Invalid credentials",
         )
-    return UserPublic(id=user.id, email=user.email, created_at=user.created_at)
+
+    if not verify_password(user.password_hash, user_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+
+    return user
